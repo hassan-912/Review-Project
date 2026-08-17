@@ -22,6 +22,7 @@ import json
 import re
 import time
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 import fitz  # PyMuPDF — local PDF text extraction to cut token payload
@@ -40,10 +41,62 @@ logger = logging.getLogger(__name__)
 # 429 RESOURCE_EXHAUSTED → sleep 3 s then skip to the next model.
 # Any other exception → raised immediately.
 AVAILABLE_MODELS: list[str] = [
-    "gemini-2.0-flash-lite",  # Primary   — free tier, active quota
-    "gemini-2.5-flash",       # Fallback 1 — higher capability
-    "gemini-2.0-flash",       # Fallback 2 — fast multi-token
+    "gemini-2.5-flash",       # Primary   — fastest multimodal model
+    "gemini-2.0-flash",       # Fallback 1 — fast multi-token
+    "gemini-2.0-flash-lite",  # Fallback 2 — free tier, lower quota
 ]
+
+# Timeout in milliseconds passed to types.HttpOptions.
+# 300,000 ms = 5 minutes — covers large PDF uploads on slow connections
+# as well as the generate_content response stream.  Using types.HttpOptions
+# (not the plain dict form) ensures this value propagates to the underlying
+# httpx transport layer, including per-read timeouts on upload streams.
+GEMINI_TIMEOUT_MS: int = 300_000
+
+# ---------------------------------------------------------------------------
+# MG Assistant Bot — System Instruction
+# Injected as system_instruction into every Gemini call so the model is
+# always primed as an expert Schengen auditor with strict output rules.
+# ---------------------------------------------------------------------------
+MG_SYSTEM_INSTRUCTION: str = """\
+You are the MG Assistant Bot, an expert Schengen Visa Application Auditor with deep knowledge of
+EU Schengen regulations, consulate review criteria, and cross-document compliance verification.
+
+Your ONLY objective is to perform a strict, precision cross-document audit across all uploaded
+visa application files. You must:
+
+1. IDENTITY & PASSPORT: Extract passport number, full legal name, and date of birth EXCLUSIVELY
+   from the passport MRZ zone. Cross-verify these against the Visa Application Form, Insurance
+   Policy (Insured Passport No.), Cover Letter, and all booking documents.
+
+2. DATES & ITINERARY: Verify that the complete travel window (departure → return) is consistent
+   across: Flight Reservation, Hotel Reservation (check-in = arrival, check-out = return),
+   Travel Plan / Day-by-Day Itinerary, Visa Application Form, Cover Letter, and Approved Leave.
+   Travel Insurance must cover the entire travel duration with minimum €30,000 medical coverage.
+
+3. ACCOMMODATION: Check whether the hotel name and address are explicitly referenced in the
+   Cover Letter. If not, note this as an advisory.
+
+4. TRAVEL PLAN & CITIES: Verify that all destinations/cities in the itinerary match the hotel
+   reservation city. Flag any attraction or day trip that is outside the Schengen Area.
+
+   CRITICAL RULE FOR TRAVEL CITIES & DESTINATIONS:
+   When extracting intended travel destinations from flight tickets or itineraries, DO NOT include
+   the applicant's origin/home city or the city they are returning to (e.g., Cairo).
+   Origin and return airports are purely for transit/transportation and are NOT Schengen destinations.
+   If a flight is Cairo → Amsterdam → Cairo, the ONLY extracted destination must be ["Amsterdam"].
+   Never extract a non-Schengen departure city into the travel_cities or destinations JSON array.
+
+5. PURPOSE & HOME TIES: Verify the Cover Letter references assets, family ties, employment
+   ties, employer name, role, salary, approved leave, and the hotel/destination.
+
+OUTPUT RULES (STRICT):
+- Never identify yourself as an AI, Gemini, or LLM. You are "MG Assistant Bot".
+- Never output raw HTML tags, raw field identifiers, or unformatted code blocks in responses.
+- Always return data in clean, structured JSON matching the exact schema provided.
+- Use null for any value that cannot be determined from the documents.
+- Dates must always be in YYYY-MM-DD ISO format.
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -300,33 +353,8 @@ def _extract_pdf_text(filename: str, file_bytes: bytes) -> str | None:
     return None
 
 
-def _passport_pdf_to_image_parts(file_bytes: bytes) -> list[types.Part]:
-    """
-    Render every page of a passport PDF to a PNG image and return them as
-    types.Part vision parts.
-
-    Passports MUST be sent as vision images so Gemini can OCR the MRZ zone
-    and the photo page.  Converting a passport PDF to plain text loses the
-    MRZ line and the visual structure, leading to wrong passport numbers.
-    """
-    parts: list[types.Part] = []
-    try:
-        doc = fitz.open(stream=file_bytes, filetype="pdf")
-        for page in doc:
-            # Render at 2x scale for better MRZ readability
-            mat = fitz.Matrix(2.0, 2.0)
-            pix = page.get_pixmap(matrix=mat)  # type: ignore[attr-defined]
-            png_bytes = pix.tobytes("png")
-            parts.append(types.Part.from_bytes(data=png_bytes, mime_type="image/png"))
-        doc.close()
-    except Exception:
-        # Fallback: send the raw PDF bytes if rendering fails
-        parts.append(types.Part.from_bytes(data=file_bytes, mime_type="application/pdf"))
-    return parts
-
-
 # ---------------------------------------------------------------------------
-# Content Parts Builder — supports multiple files per category
+# File API Helpers — upload binary content to avoid giant request payloads
 # ---------------------------------------------------------------------------
 
 def _is_passport_category(category: str) -> bool:
@@ -338,58 +366,201 @@ def _is_passport_category(category: str) -> bool:
     return "passport" in category.lower()
 
 
-def _build_content_parts(
-    uploaded_files: dict[str, list[tuple[str, bytes]]],
-) -> tuple[list, list[str]]:
+def _upload_single_file(
+    client: genai.Client,
+    display_name: str,
+    file_bytes: bytes,
+    mime_type: str,
+) -> object:
     """
-    Build the list of Gemini content parts from the multi-file upload dict.
+    Upload one file to the Gemini File API and return the file object.
+    The upload streams bytes directly — no temp file on disk.
+    """
+    file_io = io.BytesIO(file_bytes)
+    return client.files.upload(
+        file=file_io,
+        config=types.UploadFileConfig(
+            display_name=display_name,
+            mime_type=mime_type,
+        ),
+    )
 
-    Passport files are ALWAYS sent as rendered PNG images (never text) so
-    Gemini performs Vision OCR on the MRZ zone and photo page.
-    For all other PDF files, text is extracted locally with PyMuPDF first
-    (reducing token usage by ~95%).  Images and scanned non-passport PDFs
-    are wrapped with types.Part.from_bytes.
+
+def _upload_files_parallel(
+    client: genai.Client,
+    upload_tasks: list[tuple[str, str, bytes]],
+    log_fn=None,
+    max_workers: int = 5,
+) -> list:
+    """
+    Upload multiple files to the Gemini File API concurrently.
 
     Parameters
     ----------
-    uploaded_files : dict[str, list[tuple[str, bytes]]]
-        {category_label: [(filename, bytes), ...]}
+    upload_tasks : list of (display_name, mime_type, file_bytes)
 
     Returns
     -------
-    (content_parts, doc_labels)
-        content_parts: list of Gemini content parts ready for the API
-        doc_labels: flat list of labels used for the prompt header
+    list of uploaded file objects in the same order as upload_tasks.
     """
+    def _log(msg: str):
+        if log_fn:
+            log_fn(msg)
+        logger.info(msg)
+
+    if not upload_tasks:
+        return []
+
+    results: dict[int, object] = {}
+
+    def _do_upload(idx_task: tuple[int, tuple]) -> tuple[int, object]:
+        idx, (display_name, mime_type, file_bytes) = idx_task
+        _log(f"⬆️  Uploading '{display_name}' ({len(file_bytes):,} bytes)…")
+        file_obj = _upload_single_file(client, display_name, file_bytes, mime_type)
+        _log(f"✅ Uploaded '{display_name}'")
+        return idx, file_obj
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_do_upload, (idx, task)): idx
+            for idx, task in enumerate(upload_tasks)
+        }
+        for future in as_completed(futures):
+            idx, file_obj = future.result()
+            results[idx] = file_obj
+
+    return [results[i] for i in range(len(upload_tasks))]
+
+
+def _wait_for_files_active(
+    client: genai.Client,
+    file_objects: list,
+    timeout: int = 60,
+    log_fn=None,
+) -> list:
+    """
+    Poll each uploaded file until its state is ACTIVE.
+
+    Raises TimeoutError if any file takes longer than `timeout` seconds.
+    Raises ValueError if any file transitions to FAILED state.
+    """
+    def _log(msg: str):
+        if log_fn:
+            log_fn(msg)
+        logger.info(msg)
+
+    start = time.time()
+    active_files = []
+    for f in file_objects:
+        file_ref = client.files.get(name=f.name)
+        while file_ref.state.name == "PROCESSING":
+            if time.time() - start > timeout:
+                raise TimeoutError(
+                    f"File '{getattr(f, 'display_name', f.name)}' took longer than "
+                    f"{timeout}s to process on Gemini servers."
+                )
+            time.sleep(1)
+            file_ref = client.files.get(name=f.name)
+        if file_ref.state.name == "FAILED":
+            raise ValueError(
+                f"Gemini failed to process uploaded file: "
+                f"'{getattr(f, 'display_name', f.name)}'"
+            )
+        _log(f"✅ File '{getattr(file_ref, 'display_name', file_ref.name)}' is ACTIVE.")
+        active_files.append(file_ref)
+    return active_files
+
+
+# ---------------------------------------------------------------------------
+# Content Classifier — separates text parts from binary uploads
+# ---------------------------------------------------------------------------
+
+# Type alias for a content slot:
+#   dict  → ready-to-use text part
+#   int   → index into the upload_tasks list (placeholder for File API part)
+_Slot = dict | int
+
+
+def _classify_content(
+    uploaded_files: dict[str, list[tuple[str, bytes]]],
+) -> tuple[list[_Slot], list[tuple[str, str, bytes]], list[str]]:
+    """
+    Scan every uploaded file and decide how it should be sent to Gemini.
+
+    Strategy
+    --------
+    * Text-extractable PDFs (non-passport): send as plain text — smallest
+      possible token payload, no upload latency.
+    * Everything else (passport PDFs, passport images, scanned PDFs, JPEG/PNG):
+      queue for Gemini File API upload.  The actual binary data never travels
+      inside the generate_content request body, which eliminates the TLS
+      handshake timeout on large payloads.
+
+    Returns
+    -------
+    slots       : Ordered list of text-part dicts or int upload-task indices.
+    upload_tasks: list of (display_name, mime_type, file_bytes) to upload.
+    doc_labels  : Flat list of document labels for the extraction prompt.
+    """
+    slots: list[_Slot] = []
+    upload_tasks: list[tuple[str, str, bytes]] = []
     doc_labels: list[str] = []
-    content_parts: list = []
 
     for category, file_list in uploaded_files.items():
         is_passport = _is_passport_category(category)
         for idx, (filename, file_bytes) in enumerate(file_list):
-            suffix = f" (file {idx + 1}: {filename})" if len(file_list) > 1 else f" (file: {filename})"
+            suffix = (
+                f" (file {idx + 1}: {filename})" if len(file_list) > 1
+                else f" (file: {filename})"
+            )
             label = f"{category}{suffix}"
             doc_labels.append(label)
 
-            content_parts.append({"text": f"\n--- Document: {label} ---"})
+            # Document header (always a text part)
+            slots.append({"text": f"\n--- Document: {label} ---"})
 
-            if is_passport and filename.lower().endswith(".pdf"):
-                # PASSPORT PDF → always render to PNG images for Vision OCR
-                content_parts.extend(_passport_pdf_to_image_parts(file_bytes))
-            elif is_passport:
-                # PASSPORT image → always send as-is for Vision OCR
+            if is_passport:
+                # Passport: ALWAYS use File API — native PDF vision OCR handles
+                # the MRZ zone on Gemini's server side, no local rendering needed.
                 mime = _guess_mime(filename)
-                content_parts.append(_make_bytes_part(file_bytes, mime))
+                slots.append(len(upload_tasks))   # placeholder
+                upload_tasks.append((label, mime, file_bytes))
             else:
-                # All other documents: try text extraction first
-                extracted_text = _extract_pdf_text(filename, file_bytes)
-                if extracted_text:
-                    content_parts.append({"text": extracted_text})
+                # Non-passport: prefer local text extraction (fast, no upload)
+                extracted = _extract_pdf_text(filename, file_bytes)
+                if extracted:
+                    slots.append({"text": extracted})
                 else:
+                    # Scanned PDF or image → File API
                     mime = _guess_mime(filename)
-                    content_parts.append(_make_bytes_part(file_bytes, mime))
+                    slots.append(len(upload_tasks))   # placeholder
+                    upload_tasks.append((label, mime, file_bytes))
 
-    return content_parts, doc_labels
+    return slots, upload_tasks, doc_labels
+
+
+def _assemble_content_parts(
+    slots: list[_Slot],
+    active_file_refs: list,
+) -> list:
+    """
+    Build the final ordered content-parts list by substituting each integer
+    placeholder in `slots` with the corresponding active File API reference.
+    """
+    parts: list = []
+    for slot in slots:
+        if isinstance(slot, dict):
+            parts.append(slot)
+        else:
+            # int → index into active_file_refs
+            file_ref = active_file_refs[slot]
+            parts.append(
+                types.Part.from_uri(
+                    file_uri=file_ref.uri,
+                    mime_type=file_ref.mime_type,
+                )
+            )
+    return parts
 
 
 # ---------------------------------------------------------------------------
@@ -437,6 +608,7 @@ def call_gemini_with_fallback(
                 model=model_name,
                 contents=contents,
                 config=types.GenerateContentConfig(
+                    system_instruction=MG_SYSTEM_INSTRUCTION,
                     temperature=0.0,        # Deterministic extraction
                     max_output_tokens=8192,
                     # response_mime_type is intentionally omitted — it causes
@@ -445,6 +617,7 @@ def call_gemini_with_fallback(
             )
             _log(f"✅ Success with model '{model_name}'.")
             return (response.text or "").strip()
+
 
         except Exception as exc:
             err_str = str(exc)
@@ -527,17 +700,45 @@ def extract_documents(
 
     # ------------------------------------------------------------------
     # Build Gemini client — v1beta required for 2.0/2.5 model families.
+    # types.HttpOptions propagates the timeout all the way down to the
+    # httpx transport layer, which fixes the "read operation timed out"
+    # error that occurs when uploading large files via client.files.upload().
     # ------------------------------------------------------------------
     client = genai.Client(
         api_key=api_key,
-        http_options={"api_version": "v1beta"},
+        http_options=types.HttpOptions(
+            timeout=GEMINI_TIMEOUT_MS,      # 300,000 ms = 5 min
+            api_version="v1beta",
+        ),
     )
 
     # ------------------------------------------------------------------
-    # Assemble content parts from all categories / all files
+    # Phase 1: Classify files — decide what goes as text vs File API
     # ------------------------------------------------------------------
-    file_parts, doc_labels = _build_content_parts(uploaded_files)
+    slots, upload_tasks, doc_labels = _classify_content(uploaded_files)
     prompt_text = _build_extraction_prompt(doc_labels)
+
+    # ------------------------------------------------------------------
+    # Phase 2: Upload binary files to Gemini File API (parallel, 5 workers)
+    # Text-extractable PDFs skip this step entirely.
+    # ------------------------------------------------------------------
+    active_file_refs: list = []
+    if upload_tasks:
+        n_binary = len(upload_tasks)
+        _log(f"⬆️  Uploading {n_binary} binary file(s) to Gemini File API…")
+        uploaded_objs = _upload_files_parallel(
+            client, upload_tasks, log_fn=_log, max_workers=5
+        )
+        _log("⏳ Waiting for Gemini to finish processing uploaded files…")
+        active_file_refs = _wait_for_files_active(
+            client, uploaded_objs, timeout=120, log_fn=_log
+        )
+        _log(f"✅ All {n_binary} file(s) are ACTIVE — ready for analysis.")
+
+    # ------------------------------------------------------------------
+    # Phase 3: Assemble final content parts (text slots + File API URIs)
+    # ------------------------------------------------------------------
+    file_parts = _assemble_content_parts(slots, active_file_refs)
     content_parts: list = [{"text": prompt_text}] + file_parts
 
     # ------------------------------------------------------------------
