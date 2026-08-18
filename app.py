@@ -516,6 +516,12 @@ _KEY_TO_LABEL = {key: label for key, label, _ in DOCUMENT_SLOTS}
 import os
 import streamlit as st
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 def _get_api_key():
     try:
         return st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
