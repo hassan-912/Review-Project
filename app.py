@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import traceback
 import textwrap
+import pathlib
 from datetime import date, datetime
 from typing import Optional, Any
 
@@ -510,11 +511,20 @@ _KEY_TO_LABEL = {key: label for key, label, _ in DOCUMENT_SLOTS}
 
 
 # ---------------------------------------------------------------------------
-# Session State & Caching Initialization
+# API Key & Session State Initialization
 # ---------------------------------------------------------------------------
+import os
+import streamlit as st
+
+def _get_api_key():
+    try:
+        return st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
+    except Exception:
+        return os.environ.get("GEMINI_API_KEY", "")
+
 def _init_session_state():
     defaults = {
-        "api_key": "",
+        "api_key": _get_api_key(),  # Pre-configured via secrets/env
         "selected_model": AVAILABLE_MODELS[0],
         "review_result": None,
         "review_error": None,
@@ -527,6 +537,8 @@ def _init_session_state():
     for key, val in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = val
+    # Always keep the API key in sync with the hardcoded value
+    st.session_state.api_key = _HARDCODED_API_KEY
 
 
 def _compute_upload_hash(uploaded_files: dict[str, list[tuple[str, bytes]]], model_id: str) -> str:
@@ -618,20 +630,12 @@ def render_sidebar() -> tuple[dict[str, list[tuple[str, bytes]]], str]:
         st.html(
 "## ⚙️ Configuration")
 
-        # API Key
-        api_key = st.text_input(
-            "Gemini API Key",
-            type="password",
-            value=st.session_state.api_key,
-            placeholder="AIza...",
-            help="Your Google Gemini API key. Never shared or stored.",
-        )
-        st.session_state.api_key = api_key
-
-        if api_key:
-            st.success("✓ API key configured", icon="🔑")
+        # API Key — securely loaded from secrets/env
+        st.session_state.api_key = _get_api_key()
+        if st.session_state.api_key:
+            st.success("✓ API key configured securely", icon="🔑")
         else:
-            st.warning("Enter your Gemini API key to begin", icon="⚠️")
+            st.warning("⚠️ API key not found in secrets or environment variables.")
 
         # Model Selector
         st.markdown("### 🤖 Model Selection")
@@ -740,6 +744,11 @@ _FIELD_LABELS: dict[str, str] = {
     "valid_until vs return_date":         "Insurance End vs Return Date",
     "intended_arrival vs departure_date": "Visa Entry Date vs Flight Departure",
     "intended_departure vs return_date":  "Visa Exit Date vs Flight Return",
+    # New fields — email & guest cross-validation
+    "email_address":                      "Email Address (Cross-Document Match)",
+    "reservation_holder":                 "Reservation Holder Name",
+    "number_of_guests":                   "Number of Guests (Hotel)",
+    "number_of_passengers":               "Number of Passengers (Flight)",
 }
 
 
@@ -1523,7 +1532,7 @@ def run_review(
             # Step 2: Deterministic Validation
             status.update(label="⚖️ Step 2/4: Cross-verifying passport & travel dates...", state="running")
             validation_issues: list[ValidationIssue] = run_validation(extraction)
-            st.write(f"✓ Checked 11 deterministic validation rules ({len(validation_issues)} issue(s) flagged).")
+            st.write(f"✓ Checked 13 deterministic validation rules ({len(validation_issues)} issue(s) flagged).")
 
             # Step 3: Business Purpose Check
             status.update(label="🏢 Step 3/4: Assessing trip purpose & employment alignment...", state="running")
@@ -1576,15 +1585,29 @@ def main():
     # Sidebar — returns (files_dict, selected_model_id)
     uploaded_files, selected_model_id = render_sidebar()
 
-    # Hero Banner
+    # Hero Banner with inline MG logo
+    _svg_path = pathlib.Path(__file__).parent / "MG W.svg"
+    _logo_b64 = ""
+    if _svg_path.exists():
+        import base64 as _b64
+        _logo_b64 = _b64.b64encode(_svg_path.read_bytes()).decode()
+
+    _logo_img_html = (
+        f'<img src="data:image/svg+xml;base64,{_logo_b64}" '
+        'style="height:64px; width:64px; flex-shrink:0; filter:brightness(0) invert(1) opacity(0.92);" '
+        'alt="MG Logo" />'
+        if _logo_b64 else ""
+    )
+
     st.html(
-"""<div class="hero-banner">
-            <div class="hero-title">🇪🇺 Schengen Visa File Review Bot</div>
-            <div class="hero-subtitle">
-                MG-powered document analysis · 
-            </div>
-        </div>"""
-)
+        f'<div class="hero-banner" style="display:flex; align-items:center; gap:1.4rem;">'
+        f'<div style="flex:1;">'
+        f'<div class="hero-title">Schengen Visa File Review Bot</div>'
+        f'<div class="hero-subtitle">MG-powered document analysis</div>'
+        f'</div>'
+        f'{_logo_img_html}'
+        f'</div>'
+    )
 
     # Quick-status bar
     col_a, col_b, col_c = st.columns(3)
@@ -1735,22 +1758,7 @@ f'<div class="status-card {card_cls}">'
 
     st.divider()
 
-    # ── SECTION 6: PDF Download ───────────────────────────────────────
-    if _PDF_AVAILABLE:
-        pdf_bytes = _build_pdf_report(extraction, issues, score_result, biz_result)
-        st.download_button(
-            label="📥 Download Comprehensive Audit Summary PDF",
-            data=pdf_bytes,
-            file_name="schengen_visa_audit.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
-    else:
-        st.info("📥 Install `fpdf2` to enable PDF download: `pip install fpdf2`", icon="ℹ️")
-
-    st.divider()
-
-    # ── SECTION 7: Document Completeness ──────────────────────────────
+    # ── SECTION 6: Document Completeness ──────────────────────────────
     st.html('<div class="section-header">📎 Document Completeness Check</div>')
     render_missing_documents(result["uploaded_files"])
 
@@ -1793,19 +1801,135 @@ f'<div class="status-card {card_cls}">'
     with st.expander("🛠️ Advanced Technical Details (Full Issues Table)", expanded=False):
         render_error_table(issues)
 
+    # ── SECTION 10: Pinned Action Summary Download ────────────────────
+    if _PDF_AVAILABLE:
+        st.html(
+            '<div style="margin-top:1.5rem; padding:1rem 1.4rem; '
+            'background:linear-gradient(135deg,rgba(79,142,247,0.12),rgba(103,58,183,0.12)); '
+            'border:1px solid rgba(79,142,247,0.3); border-radius:14px;">'
+            '<div style="font-size:0.95rem; font-weight:700; color:#58a6ff; margin-bottom:0.4rem;">'
+            '📄 Action Summary Report</div>'
+            '<div style="font-size:0.85rem; color:#8b949e;">'
+            'A clean, printable PDF listing your score, each fault, and exactly what to fix. '
+            'Share it with your visa consultant or travel agent.'
+            '</div></div>'
+        )
+        action_summary_bytes = _build_summary_pdf(extraction, issues, score_result)
+        st.download_button(
+            label="📄 Download Action Summary (Clean PDF)",
+            data=action_summary_bytes,
+            file_name="Visa_Action_Summary.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            type="primary",
+        )
+
     # ── Footer ────────────────────────────────────────────────────────
     st.html(
         '<div style="text-align:center; color:#8b949e; font-size:0.8rem; margin-top:3rem; '
         'padding-top:2rem; border-top:1px solid rgba(255,255,255,0.07);">'
-        'Schengen Visa File Review Bot · Powered by Gemini · '
+        'MG  Schengen Visa File Assistant · Powered by MG-visa · '
         'Results are advisory only and do not constitute legal or consular advice.'
         '</div>'
 )
 
 
 # ---------------------------------------------------------------------------
-# PDF Report Builder
+# FPDF Unicode Sanitizer
 # ---------------------------------------------------------------------------
+
+# Absolute path to the MG logo SVG — used by both PDF builders
+import pathlib as _pathlib
+_LOGO_SVG_PATH: str | None = None
+_logo_candidate = _pathlib.Path(__file__).parent / "MG W.svg"
+if _logo_candidate.exists():
+    _LOGO_SVG_PATH = str(_logo_candidate)
+
+def format_arabic(text: str) -> str:
+    """Reshape Arabic text for FPDF compatibility."""
+    if not text:
+        return ""
+    try:
+        import arabic_reshaper
+        from bidi.algorithm import get_display
+        return get_display(arabic_reshaper.reshape(str(text)))
+    except ImportError:
+        return str(text)
+
+
+def sanitize_for_fpdf(text: str) -> str:
+    """
+    Replace Unicode characters that are outside the Latin-1 range supported
+    by FPDF's built-in Helvetica/Times/Courier fonts with safe ASCII equivalents.
+
+    This prevents FPDFUnicodeEncodingException when LLM output contains
+    em-dashes, smart quotes, bullet points, or other non-ASCII symbols.
+    """
+    if not text:
+        return ""
+    replacements = [
+        # Dashes
+        ("\u2014", "-"),   # em dash  —
+        ("\u2013", "-"),   # en dash  –
+        ("\u2012", "-"),   # figure dash
+        ("\u2011", "-"),   # non-breaking hyphen
+        # Smart / curly quotes
+        ("\u201c", '"'),   # left double quotation mark  "
+        ("\u201d", '"'),   # right double quotation mark "
+        ("\u2018", "'"),   # left single quotation mark  '
+        ("\u2019", "'"),   # right single quotation mark '
+        ("\u201a", ","),   # single low-9 quotation mark ‚
+        ("\u201e", '"'),   # double low-9 quotation mark „
+        ("\u00ab", '"'),   # left-pointing double angle «
+        ("\u00bb", '"'),   # right-pointing double angle »
+        # Bullets & list markers
+        ("\u2022", "*"),   # bullet  •
+        ("\u2023", "*"),   # triangular bullet
+        ("\u25cf", "*"),   # black circle ●
+        ("\u25e6", "*"),   # white bullet ◦
+        ("\u2043", "-"),   # hyphen bullet ⁃
+        # Ellipsis
+        ("\u2026", "..."), # horizontal ellipsis …
+        # Misc typography
+        ("\u00a0", " "),   # non-breaking space
+        ("\u2009", " "),   # thin space
+        ("\u200b", ""),    # zero-width space
+        ("\u00b7", "."),   # middle dot ·
+        ("\u2192", "->"),  # rightwards arrow →
+        ("\u2190", "<-"),  # leftwards arrow ←
+        ("\u2713", "OK"),  # check mark ✓
+        ("\u274c", "X"),   # cross mark ✘
+        ("\u26a0", "!"),   # warning sign ⚠
+        # Currency beyond Latin-1
+        ("\u20ac", "EUR"), # euro sign €  (Latin-1 has it at 0x80 but FPDF may miss it)
+    ]
+    for char, substitute in replacements:
+        text = text.replace(char, substitute)
+    # Final fallback: strip any remaining non-Latin-1 character
+    return text.encode("latin-1", errors="replace").decode("latin-1")
+
+
+# ---------------------------------------------------------------------------
+# PDF Report Builder  (Full Audit — detailed)
+# ---------------------------------------------------------------------------
+def _draw_pdf_watermark(pdf: Any) -> None:
+    """
+    Draw the MG logo as a centered, very-low-opacity watermark on the current page.
+    Must be called immediately after add_page() so it sits behind all content.
+    """
+    if not _LOGO_SVG_PATH:
+        return
+    from fpdf import FPDF  # already imported in callers, safe re-import
+    page_w = pdf.w
+    page_h = pdf.h
+    logo_size = 100  # As requested by user
+    x = (page_w - logo_size) / 2
+    # Center vertically on the page
+    y = (page_h - logo_size) / 2
+    with pdf.local_context(fill_opacity=0.04, stroke_opacity=0.04):
+        pdf.image(_LOGO_SVG_PATH, x=x, y=y, w=logo_size)
+
+
 def _build_pdf_report(
     extraction: VisaDocumentExtraction,
     issues: list[ValidationIssue],
@@ -1813,26 +1937,36 @@ def _build_pdf_report(
     biz_result: Any,
 ) -> bytes:
     """
-    Build a clean, printable PDF audit summary using fpdf2.
+    Build a clean, printable comprehensive PDF audit summary using fpdf2.
+    All text is sanitized through sanitize_for_fpdf() to prevent Unicode errors.
+    Includes MG logo in header and as a centered watermark on every page.
     """
     from fpdf import FPDF
 
     def _row(p: FPDF, h: float, txt: str) -> None:
-        p.multi_cell(0, h, txt)
+        # Reset X to left margin (prevents "Not enough horizontal space" error)
+        # and sanitize text before rendering.
+        p.set_x(p.l_margin)
+        p.multi_cell(0, h, sanitize_for_fpdf(str(txt)))
 
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
+    _draw_pdf_watermark(pdf)  # Behind all content
 
+    # ── Header with logo ────────────────────────────────────────────────────
     pdf.set_font("Helvetica", "B", 18)
     _row(pdf, 10, "Schengen Visa Application - Audit Summary")
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(100, 100, 100)
-    _row(pdf, 6, "Generated by Schengen Visa File Review Bot | Advisory only")
+    _row(pdf, 6, "Generated by MG Visa File Review Bot | Advisory only")
+    # Stamp logo top-right in the header area
+    if _LOGO_SVG_PATH:
+        pdf.image(_LOGO_SVG_PATH, x=pdf.w - 35, y=5, w=22)
     pdf.ln(4)
 
     # Score line
-    score_label = f"{score_result.score:.0f}% - {score_result.badge_label}"
+    score_label = sanitize_for_fpdf(f"{score_result.score:.0f}% - {score_result.badge_label}")
     pdf.set_font("Helvetica", "B", 14)
     pdf.set_text_color(0, 0, 0)
     _row(pdf, 8, f"Acceptance Likelihood Score: {score_label}")
@@ -1842,7 +1976,11 @@ def _build_pdf_report(
     pdf.set_font("Helvetica", "B", 12)
     _row(pdf, 7, "Applicant Information")
     pdf.set_font("Helvetica", "", 10)
-    name = extraction.passport.full_name or (extraction.visa_form.applicant_name if extraction.visa_form else None) or "N/A"
+    name = (
+        extraction.passport.full_name
+        or (extraction.visa_form.applicant_name if extraction.visa_form else None)
+        or "N/A"
+    )
     passport_num = extraction.passport.passport_number or "N/A"
     _row(pdf, 6, f"Name: {name}")
     _row(pdf, 6, f"Passport No.: {passport_num}")
@@ -1855,17 +1993,218 @@ def _build_pdf_report(
     for issue in sorted(issues, key=lambda i: _sev_order.get(i.severity, 9)):
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_text_color(180, 50, 50)
-        heading = f"[{issue.severity.value}] {issue.document_name} - {issue.field_name}"
+        heading = sanitize_for_fpdf(
+            f"[{issue.severity.value}] {issue.document_name} - {issue.field_name}"
+        )
         _row(pdf, 6, heading[:120])
         pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(50, 50, 50)
-        _row(pdf, 5, f"   Fix: {issue.recommended_fix}")
+        _row(pdf, 5, f"   Fix: {sanitize_for_fpdf(issue.recommended_fix)}")
         pdf.ln(1)
 
     pdf.set_text_color(0, 0, 0)
     pdf.ln(4)
     pdf.set_font("Helvetica", "I", 8)
     _row(pdf, 5, "Results are advisory only and do not constitute legal or immigration advice.")
+
+    return bytes(pdf.output())
+
+
+# ---------------------------------------------------------------------------
+# Action Summary PDF Builder  (Clean one-page summary for applicants)
+# ---------------------------------------------------------------------------
+def _build_summary_pdf(
+    extraction: VisaDocumentExtraction,
+    issues: list[Any],
+    score_result: Any,
+) -> bytes:
+    """
+    Build a clean, applicant-friendly A4 Action Summary PDF.
+
+    Contains ONLY:
+      1. Acceptance likelihood score + label
+      2. Bulleted list of identified faults (document & field)
+      3. Recommended fix for each fault
+
+    All text passes through sanitize_for_fpdf() to prevent Unicode errors.
+    """
+    from fpdf import FPDF
+
+    _SEV_COLORS = {
+        "CRITICAL": (200, 30, 30),
+        "HIGH":     (180, 100, 0),
+        "MEDIUM":   (30, 100, 200),
+        "LOW":      (30, 150, 60),
+    }
+    _sev_order = {Severity.CRITICAL: 0, Severity.HIGH: 1, Severity.MEDIUM: 2, Severity.LOW: 3}
+
+    pdf = FPDF(format="A4")
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.set_margins(left=20, top=20, right=20)
+    pdf.add_page()
+    
+    # Fill the entire page with the requested dark white (#E1D9D1)
+    pdf.set_fill_color(225, 217, 209)
+    pdf.rect(0, 0, pdf.w, pdf.h, style="F")
+
+    _draw_pdf_watermark(pdf)  # Behind all content
+    
+    # Load Arabic-supporting Arial fonts
+    import os
+    if os.path.exists(r"C:\Windows\Fonts\arial.ttf"):
+        pdf.add_font("Arial_Ar", "", r"C:\Windows\Fonts\arial.ttf")
+        pdf.add_font("Arial_Ar", "B", r"C:\Windows\Fonts\arialbd.ttf")
+    else:
+        # Fallback if Arial is not found
+        pdf.add_font("Arial_Ar", "", "Helvetica")
+        pdf.add_font("Arial_Ar", "B", "Helvetica")
+
+    # ── Header bar with logo ─────────────────────────────────────────────────
+    pdf.set_fill_color(15, 25, 50)
+    pdf.rect(0, 0, 210, 28, style="F")
+    # Logo in top-right of header bar
+    if _LOGO_SVG_PATH:
+        pdf.image(_LOGO_SVG_PATH, x=183, y=3, w=22)
+    pdf.set_y(8)
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_x(20)
+    pdf.cell(0, 10, "Schengen Visa - Action Summary Report", ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_x(20)
+    pdf.cell(0, 5, "MG Assistant Bot  ", ln=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(8)
+
+    # ── Applicant Brief (Arabic & Organized) ─────────────────────────────────
+    pdf.set_font("Arial_Ar", "B", 14)
+    pdf.set_text_color(20, 20, 20)
+    pdf.set_x(20)
+    pdf.cell(0, 10, format_arabic("ملف المتقدم (Applicant Brief)"), ln=True, align="R")
+    
+    pdf.set_font("Arial_Ar", "", 11)
+    pdf.set_text_color(40, 40, 40)
+    cl = extraction.cover_letter
+    
+    name = cl.applicant_full_name or extraction.passport.full_name or "غير محدد"
+    nat = cl.applicant_nationality or "غير محدد"
+    pass_num = cl.applicant_passport_number or extraction.passport.passport_number or "غير محدد"
+    
+    def _ar_row(label, val):
+        pdf.set_font("Arial_Ar", "B", 11)
+        # We merge label and val to format properly in RTL
+        line = format_arabic(f"{val} :{label}")
+        pdf.set_x(20)
+        pdf.multi_cell(0, 6, line, align="R")
+    
+    _ar_row("الاسم", name)
+    _ar_row("الجنسية / جواز السفر", f"{nat} ، جواز سفر {pass_num}")
+    
+    if cl.business_owner_profile:
+        pdf.ln(2)
+        _ar_row("الملف التجاري / المهني", cl.business_owner_profile)
+        
+    if cl.social_financial_ties:
+        pdf.ln(2)
+        _ar_row("الروابط الاجتماعية والمالية", cl.social_financial_ties)
+        
+    pdf.ln(6)
+
+    # ── Score Section ────────────────────────────────────────────────────────
+    score = score_result.score
+    badge = sanitize_for_fpdf(score_result.badge_label)
+
+    # Determine score colour
+    if score >= 85:
+        score_rgb = (30, 150, 60)
+        verdict = "Your file is in strong shape. Review the notes below before submission."
+    elif score >= 65:
+        score_rgb = (180, 120, 0)
+        verdict = "Minor corrections needed. Address the issues below to strengthen your file."
+    else:
+        score_rgb = (200, 30, 30)
+        verdict = "High rejection risk. The issues below require immediate attention."
+
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.set_text_color(*score_rgb)
+    pdf.set_x(20)
+    pdf.cell(0, 8, f"Acceptance  Score: {score:.0f}%  [{badge}]", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(60, 60, 60)
+    pdf.set_x(20)
+    pdf.multi_cell(0, 6, sanitize_for_fpdf(verdict))
+    pdf.ln(5)
+
+    # Divider
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(20, pdf.get_y(), 190, pdf.get_y())
+    pdf.ln(4)
+
+    # ── Issues Section ───────────────────────────────────────────────────────
+    sorted_issues = sorted(issues, key=lambda i: _sev_order.get(i.severity, 9))
+
+    if not sorted_issues:
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.set_text_color(30, 150, 60)
+        pdf.set_x(20)
+        pdf.cell(0, 8, "No issues detected — your file appears complete and consistent!", ln=True)
+    else:
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_text_color(20, 20, 20)
+        pdf.set_x(20)
+        pdf.cell(0, 8, f"Action Items  ({len(sorted_issues)} issue(s) found)", ln=True)
+        pdf.ln(2)
+
+        for idx, issue in enumerate(sorted_issues, start=1):
+            sev_val = issue.severity.value
+            r, g, b = _SEV_COLORS.get(sev_val, (80, 80, 80))
+
+            # Severity badge line
+            pdf.set_x(20)
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_text_color(r, g, b)
+            badge_txt = sanitize_for_fpdf(
+                f"[{sev_val}]  {issue.document_name}  |  {issue.field_name}"
+            )
+            pdf.multi_cell(0, 6, f"{idx}.  {badge_txt}")
+
+            # Fault description
+            pdf.set_x(24)
+            pdf.set_font("Helvetica", "", 9)
+            pdf.set_text_color(50, 50, 50)
+            fault_line = sanitize_for_fpdf(
+                f"Found: {issue.found_value or 'Missing'}"
+                + (f"  |  Expected: {issue.expected_value}" if issue.expected_value else "")
+            )
+            pdf.multi_cell(0, 5, fault_line)
+
+            # Fix recommendation (indented block)
+            pdf.set_x(24)
+            pdf.set_font("Helvetica", "I", 9)
+            pdf.set_text_color(30, 30, 120)
+            fix_txt = sanitize_for_fpdf(f"Fix: {issue.recommended_fix}")
+            pdf.multi_cell(0, 5, fix_txt)
+
+            pdf.ln(3)
+            # Light separator between items
+            if idx < len(sorted_issues):
+                pdf.set_draw_color(230, 230, 230)
+                pdf.line(24, pdf.get_y(), 190, pdf.get_y())
+                pdf.ln(3)
+
+    # ── Footer ───────────────────────────────────────────────────────────────
+    pdf.ln(6)
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(20, pdf.get_y(), 190, pdf.get_y())
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.set_text_color(150, 150, 150)
+    pdf.set_x(20)
+    pdf.multi_cell(
+        0, 4,
+        "This report is generated by the MG Assistant Bot and is advisory only. "
+        "Always verify requirements with the relevant consulate before submission.",
+    )
 
     return bytes(pdf.output())
 

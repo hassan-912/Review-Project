@@ -47,6 +47,13 @@ class ValidationIssue(BaseModel):
     expected_value: str
     severity: Severity
     recommended_fix: str
+    score_override_penalty: Optional[float] = None
+    """
+    When set, the scorer uses this exact point deduction for this specific issue
+    instead of the standard tier penalty from SEVERITY_DEDUCTIONS.
+    Use for nuanced checks where the severity label (for display) should differ
+    from the scoring impact (e.g., an advisory LOW issue with a fixed 4-point penalty).
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -473,7 +480,13 @@ def _check_employment_leave_dates(data: VisaDocumentExtraction) -> list[Validati
     """
     Rule: Approved leave period must completely cover the travel period
     (flight departure → flight return).
-    If no employment documents were uploaded, skip silently.
+
+    This check is ONLY meaningful for salaried employees who submit an HR Letter.
+    Self-employed applicants who provide a Commercial Registry or Tax Card as their
+    primary employment proof are not expected to have an approved leave letter —
+    those document types do NOT trigger leave-date or leave-approval checks.
+
+    If no employment documents were uploaded at all, skip silently.
     """
     issues: list[ValidationIssue] = []
     emp = data.employment
@@ -482,12 +495,22 @@ def _check_employment_leave_dates(data: VisaDocumentExtraction) -> list[Validati
     if not emp.employer_name and not emp.approved_leave_start and not emp.approved_leave_end:
         return issues
 
+    # ── Business-owner / self-employed guard ─────────────────────────────────
+    # If the primary employment document is a Commercial Registry or Tax Card,
+    # the applicant is self-employed. Leave-date and leave-approval rules
+    # do NOT apply — skip the check entirely.
+    doc_type = (emp.employment_doc_type or "").strip().lower()
+    _SELF_EMPLOYED_DOC_TYPES = {"commercial registry", "tax card"}
+    if doc_type in _SELF_EMPLOYED_DOC_TYPES:
+        return issues  # No leave checks for self-employed applicants
+
+    # ── HR Letter path (or unknown doc type — apply checks for safety) ───────
     flight_dep = _parse_date(data.flight.departure_date)
     flight_ret = _parse_date(data.flight.return_date)
     leave_start = _parse_date(emp.approved_leave_start)
     leave_end   = _parse_date(emp.approved_leave_end)
 
-    # Check that leave approval letter exists
+    # Check that leave approval letter exists (only meaningful for HR-letter holders)
     if emp.leave_approval_confirmed is False:
         issues.append(ValidationIssue(
             document_name="Employment Documents",
@@ -758,6 +781,193 @@ def _check_schengen_city_validity(data: VisaDocumentExtraction) -> list[Validati
     return issues
 
 
+def _check_email_crossvalidation(data: VisaDocumentExtraction) -> list[ValidationIssue]:
+    """
+    Rule: Email address on the Flight Reservation must match the email on
+    the Visa Application Form when both are present.
+
+    This is an advisory check only (LOW severity). Flights booked via travel
+    agencies commonly show the agency's operational email on the reservation
+    (e.g., operations@flyin.com) rather than the applicant's personal email.
+    The penalty is capped at a fixed 4 points via score_override_penalty.
+    """
+    issues: list[ValidationIssue] = []
+    flight_email  = getattr(data.flight,   "email_address", None)
+    visa_email    = getattr(data.visa_form, "email_address", None)
+
+    if not flight_email or not visa_email:
+        return issues  # Cannot compare - one or both are absent
+
+    if flight_email.strip().lower() != visa_email.strip().lower():
+        issues.append(ValidationIssue(
+            document_name="Flight Reservation / Visa Application Form",
+            field_name="email_address",
+            found_value=f"Flight: '{flight_email}' | Visa Form: '{visa_email}'",
+            expected_value="Identical email address on both documents",
+            severity=Severity.LOW,            # Advisory only - see note below
+            score_override_penalty=4.0,       # Fixed 4% deduction regardless of tier
+            recommended_fix=(
+                "Advisory: Email addresses differ between the flight reservation and "
+                "the Visa Application Form. This is common when flights are booked "
+                f"through a travel agency (e.g., '{flight_email}' may be the "
+                "agency's operational email). No action is required if the flight "
+                "was booked via a licensed travel agent - the booking is still valid. "
+                "If preferred, request a booking confirmation that shows your personal "
+                f"email ('{visa_email}') instead of the agency email."
+            ),
+        ))
+    return issues
+
+
+def _check_guest_name_and_count(data: VisaDocumentExtraction) -> list[ValidationIssue]:
+    """
+    Rule: The applicant's name (from passport / visa form) should appear in
+    the reservation holder / guest name fields of both the hotel and flight.
+
+    Additionally, if the hotel or flight booking lists more than 1 guest /
+    passenger but the rest of the visa file appears to be for a single applicant,
+    add an advisory note.
+    """
+    issues: list[ValidationIssue] = []
+
+    # Reference name: prefer passport, fall back to visa form
+    applicant_name = (
+        data.passport.full_name
+        or (data.visa_form.applicant_name if data.visa_form else None)
+    )
+
+    # ── 1. Name presence in hotel reservation holder ───────────────────────
+    hotel_holder = getattr(data.hotel, "reservation_holder", None) or data.hotel.guest_name
+    if applicant_name and hotel_holder:
+        if not _names_match(applicant_name, hotel_holder):
+            issues.append(ValidationIssue(
+                document_name="Hotel Reservation",
+                field_name="reservation_holder",
+                found_value=hotel_holder,
+                expected_value=applicant_name,
+                severity=Severity.HIGH,
+                recommended_fix=(
+                    f"The hotel reservation is held under '{hotel_holder}', "
+                    f"but the passport name is '{applicant_name}'. "
+                    "The primary guest name on the hotel booking must match the "
+                    "passport exactly. Contact the hotel to update the reservation name."
+                ),
+            ))
+
+    # ── 2. Name presence in flight reservation holder ──────────────────────
+    flight_holder = getattr(data.flight, "reservation_holder", None) or data.flight.passenger_name
+    if applicant_name and flight_holder:
+        if not _names_match(applicant_name, flight_holder):
+            issues.append(ValidationIssue(
+                document_name="Flight Reservation",
+                field_name="reservation_holder",
+                found_value=flight_holder,
+                expected_value=applicant_name,
+                severity=Severity.HIGH,
+                recommended_fix=(
+                    f"The flight reservation is held under '{flight_holder}', "
+                    f"but the passport name is '{applicant_name}'. "
+                    "All flight tickets must be in the applicant's exact passport name. "
+                    "Contact the airline or travel agent to correct the name on the ticket."
+                ),
+            ))
+
+    # ── 3. Advisory: hotel guest count > 1 for single-applicant file ───────
+    hotel_guests = getattr(data.hotel, "number_of_guests", None)
+    if hotel_guests and hotel_guests > 1:
+        issues.append(ValidationIssue(
+            document_name="Hotel Reservation",
+            field_name="number_of_guests",
+            found_value=str(hotel_guests),
+            expected_value="1 (single applicant) or matching number of co-applicants",
+            severity=Severity.LOW,
+            recommended_fix=(
+                f"The hotel reservation lists {hotel_guests} guests. "
+                "If this is a single-applicant visa application, the consulate may "
+                "query why multiple guests are booked. Ensure co-travelling companions "
+                "are either included in this application or have separate visa files. "
+                "A brief explanatory note in the cover letter is recommended."
+            ),
+        ))
+
+    # ── 4. Advisory: flight passenger count > 1 for single-applicant file ──
+    flight_pax = getattr(data.flight, "number_of_passengers", None)
+    if flight_pax and flight_pax > 1:
+        issues.append(ValidationIssue(
+            document_name="Flight Reservation",
+            field_name="number_of_passengers",
+            found_value=str(flight_pax),
+            expected_value="1 (single applicant) or matching number of co-applicants",
+            severity=Severity.LOW,
+            recommended_fix=(
+                f"The flight booking covers {flight_pax} passengers. "
+                "If this is a single-applicant application, confirm whether "
+                "all travelling companions have their own visa files. "
+                "Mention co-travellers in the cover letter to avoid inconsistencies."
+            ),
+        ))
+
+    return issues
+
+
+def _check_itinerary_dates(data: VisaDocumentExtraction) -> list[ValidationIssue]:
+    """
+    Rule: All discrete dates mentioned in the travel itinerary must fall within
+    the overall intended travel window (Arrival to Departure).
+    If an itinerary date falls strictly outside this window, flag it as a HIGH severity issue.
+    """
+    issues: list[ValidationIssue] = []
+    
+    if not data.itinerary_dates:
+        return issues
+        
+    # Determine the intended travel window
+    arrival_str = (
+        getattr(data.flight, "departure_date", None) or 
+        getattr(data.visa_form, "intended_arrival", None)
+    )
+    departure_str = (
+        getattr(data.flight, "return_date", None) or 
+        getattr(data.visa_form, "intended_departure", None)
+    )
+    
+    if not arrival_str or not departure_str:
+        return issues  # Need both bounds to define the window
+        
+    from datetime import datetime
+    
+    try:
+        arrival_dt = datetime.strptime(arrival_str, "%Y-%m-%d").date()
+        departure_dt = datetime.strptime(departure_str, "%Y-%m-%d").date()
+    except ValueError:
+        return issues
+        
+    for itin_date_str in data.itinerary_dates:
+        if not itin_date_str:
+            continue
+        try:
+            itin_dt = datetime.strptime(itin_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            continue
+            
+        if itin_dt < arrival_dt or itin_dt > departure_dt:
+            issues.append(ValidationIssue(
+                document_name="Travel Itinerary",
+                field_name="itinerary_dates",
+                found_value=f"Itinerary Date: {itin_date_str}",
+                expected_value=f"Within intended travel window: {arrival_str} to {departure_str}",
+                severity=Severity.HIGH,
+                recommended_fix=(
+                    f"A date listed in your travel itinerary ({itin_date_str}) falls "
+                    f"outside your intended travel window ({arrival_str} to {departure_str}). "
+                    "This is a critical consistency error. Ensure the itinerary dates precisely "
+                    "match your flight and hotel bookings before submitting your file."
+                ),
+            ))
+            
+    return issues
+
+
 # ---------------------------------------------------------------------------
 # Main Validation Entry Point
 # ---------------------------------------------------------------------------
@@ -789,6 +999,9 @@ def run_validation(data: VisaDocumentExtraction) -> list[ValidationIssue]:
     all_issues.extend(_check_employment_leave_dates(data))
     all_issues.extend(_check_employment_consistency(data))
     all_issues.extend(_check_missing_fields(data))
+    all_issues.extend(_check_email_crossvalidation(data))         # Rule 12 — Email cross-check
+    all_issues.extend(_check_guest_name_and_count(data))          # Rule 13 — Guest name & count
+    all_issues.extend(_check_itinerary_dates(data))               # Rule 14 - Itinerary Dates
 
     # Sort: CRITICAL → HIGH → MEDIUM → LOW
     severity_order = {

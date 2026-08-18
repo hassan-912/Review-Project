@@ -96,7 +96,28 @@ def calculate_score(
     bonus_detail: list[dict] = []
 
     # ------------------------------------------------------------------
-    # Tally issues by severity
+    # Split issues: fixed-penalty overrides vs. standard tier issues
+    # Issues with score_override_penalty set are deducted at their exact
+    # specified amount and excluded from the tier deduction loop.
+    # ------------------------------------------------------------------
+    override_issues  = [i for i in issues if i.score_override_penalty is not None]
+    standard_issues  = [i for i in issues if i.score_override_penalty is None]
+
+    # Apply override-penalty issues individually
+    for issue in override_issues:
+        penalty = float(issue.score_override_penalty)  # type: ignore[arg-type]
+        score -= penalty
+        deductions_detail.append({
+            "severity": issue.severity.value,
+            "issue_count": 1,
+            "points_per_issue": penalty,
+            "total_deducted": penalty,
+            "was_capped": False,
+            "note": f"Fixed override penalty for: {issue.field_name}",
+        })
+
+    # ------------------------------------------------------------------
+    # Tally standard (non-override) issues by severity
     # ------------------------------------------------------------------
     counts: dict[Severity, int] = {
         Severity.CRITICAL: 0,
@@ -104,7 +125,7 @@ def calculate_score(
         Severity.MEDIUM: 0,
         Severity.LOW: 0,
     }
-    for issue in issues:
+    for issue in standard_issues:
         counts[issue.severity] = counts.get(issue.severity, 0) + 1
 
     # ------------------------------------------------------------------
@@ -161,6 +182,11 @@ def calculate_score(
     else:
         badge_label = "Weak — High Risk of Rejection"
         badge_color = "red"
+
+    # Also include override-penalty issues in the UI severity counts
+    # (they are scored separately but should appear in the filter pills)
+    for issue in override_issues:
+        counts[issue.severity] = counts.get(issue.severity, 0) + 1
 
     return ScoreResult(
         score=round(score, 1),

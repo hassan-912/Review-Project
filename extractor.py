@@ -41,9 +41,10 @@ logger = logging.getLogger(__name__)
 # 429 RESOURCE_EXHAUSTED → sleep 3 s then skip to the next model.
 # Any other exception → raised immediately.
 AVAILABLE_MODELS: list[str] = [
-    "gemini-2.5-flash",       # Primary   — fastest multimodal model
-    "gemini-2.0-flash",       # Fallback 1 — fast multi-token
-    "gemini-2.0-flash-lite",  # Fallback 2 — free tier, lower quota
+    "gemini-3-flash",          # Primary
+    "gemini-3.7-flash",        # First fallback
+    "gemini-3.6-flash",        # Second fallback
+    "gemini-3.5-flash-lite",   # Final safety fallback
 ]
 
 # Timeout in milliseconds passed to types.HttpOptions.
@@ -121,6 +122,18 @@ class FlightInfo(BaseModel):
     destination_city: Optional[str] = None
     booking_reference: Optional[str] = None
     passenger_name: Optional[str] = None
+    email_address: Optional[str] = Field(
+        None,
+        description="Email address of the booker/passenger as printed on the flight reservation confirmation"
+    )
+    reservation_holder: Optional[str] = Field(
+        None,
+        description="Full name of the primary reservation holder on the flight booking"
+    )
+    number_of_passengers: Optional[int] = Field(
+        None,
+        description="Total number of passengers on this flight booking"
+    )
 
 
 class HotelInfo(BaseModel):
@@ -131,6 +144,18 @@ class HotelInfo(BaseModel):
     city: Optional[str] = None
     guest_name: Optional[str] = None
     booking_reference: Optional[str] = None
+    email_address: Optional[str] = Field(
+        None,
+        description="Email address associated with the hotel booking confirmation"
+    )
+    reservation_holder: Optional[str] = Field(
+        None,
+        description="Full name of the primary guest / reservation holder as stated on the hotel booking"
+    )
+    number_of_guests: Optional[int] = Field(
+        None,
+        description="Total number of guests listed on the hotel reservation"
+    )
 
 
 class InsuranceInfo(BaseModel):
@@ -160,6 +185,11 @@ class CoverLetterInfo(BaseModel):
     applicant_name_mentioned: Optional[bool] = None
     dates_mentioned: Optional[bool] = None
     destination_country_mentioned: Optional[bool] = None
+    applicant_full_name: Optional[str] = Field(None, description="Full name of applicant as mentioned in the cover letter (translated to Arabic)")
+    applicant_nationality: Optional[str] = Field(None, description="Nationality of applicant as mentioned in the cover letter (translated to Arabic)")
+    applicant_passport_number: Optional[str] = Field(None, description="Passport number of applicant as mentioned in the cover letter")
+    business_owner_profile: Optional[str] = Field(None, description="Detailed profile of applicant's business ownership, e.g. Founder/owner of Company XYZ, commercial register number, years in operation. (MUST be translated to fluent Arabic)")
+    social_financial_ties: Optional[str] = Field(None, description="Detailed profile of applicant's social and financial ties to home country, e.g. properties owned, cars, family ties. (MUST be translated to fluent Arabic)")
     employer_mentioned: Optional[bool] = Field(
         None, description="Whether the cover letter mentions the employer or company name"
     )
@@ -200,6 +230,16 @@ class EmploymentInfo(BaseModel):
     contract_type: Optional[str] = Field(
         None, description="Employment contract type e.g. permanent, fixed-term, part-time"
     )
+    employment_doc_type: Optional[str] = Field(
+        None,
+        description=(
+            "The primary type of employment document uploaded. "
+            "Must be one of: 'HR Letter', 'Commercial Registry', 'Tax Card', 'Payslip', "
+            "'Employment Contract', 'Leave Approval Letter', or 'Other'. "
+            "Use 'Commercial Registry' or 'Tax Card' for self-employed / business-owner applicants. "
+            "Use 'HR Letter' for salaried employees with an employer-issued letter."
+        ),
+    )
 
 
 class VisaApplicationInfo(BaseModel):
@@ -213,6 +253,10 @@ class VisaApplicationInfo(BaseModel):
     purpose_of_journey: Optional[str] = None
     intended_arrival: Optional[str] = None
     intended_departure: Optional[str] = None
+    email_address: Optional[str] = Field(
+        None,
+        description="Email address of the applicant as declared on the Schengen visa application form"
+    )
 
 
 class VisaDocumentExtraction(BaseModel):
@@ -239,6 +283,13 @@ class VisaDocumentExtraction(BaseModel):
         description=(
             "Complete list of city names visited according to the hotel reservations and "
             "travel itinerary. Include ALL cities, e.g. ['Amsterdam', 'Paris', 'Rome']."
+        )
+    )
+    itinerary_dates: Optional[list[str]] = Field(
+        None,
+        description=(
+            "A complete list of ALL specific dates mentioned in the travel itinerary document. "
+            "Extract every individual date entry or sub-heading (format YYYY-MM-DD)."
         )
     )
     raw_extraction_notes: Optional[str] = Field(
@@ -312,12 +363,36 @@ Pay close attention to:
 3. Passport number — extract from PASSPORT MRZ only, critical for cross-verification.
 4. Insurance coverage — extract the numeric amount in EUR.
 5. Cover letter — identify: purpose, funding, ties to home country, documents list, employer mention.
+   Also extract the applicant's full name, nationality, and passport number from the cover letter (translate name and nationality to Arabic).
+   Extract their `business_owner_profile` (details of their business, commercial register, etc.) 
+   and `social_financial_ties` (properties owned, vehicles, family ties) if described in the letter.
+   **CRITICAL: The `business_owner_profile` and `social_financial_ties` fields MUST be written in clear, professional Arabic.**
 6. Business documents — field of work from Commercial Registry / Tax Card vs invitation topic.
 7. Destination — determine the Schengen country where applicant spends the most nights.
 8. Employment documents — extract employer name, job title, monthly salary, approved leave dates,
    whether leave approval is explicitly confirmed, and contract type.
+   Also set `employment.employment_doc_type` to the primary document type uploaded:
+   'HR Letter', 'Commercial Registry', 'Tax Card', 'Payslip', 'Employment Contract',
+   'Leave Approval Letter', or 'Other'. Self-employed / business-owner applicants
+   submitting a Commercial Registry or Tax Card should be classified accordingly.
 9. Cities — compile a complete list of ALL cities mentioned in hotel reservations and the
    travel itinerary. Store them in `travel_cities` as a JSON array of strings.
+10. Email addresses — extract `flight.email_address` from the flight reservation confirmation
+    (the email used to book or receive the e-ticket). Extract `visa_form.email_address` from
+    the applicant's email field on the official Schengen visa application form. Extract
+    `hotel.email_address` from the hotel booking confirmation email field.
+11. Reservation holders & guest counts — extract `flight.reservation_holder` (the name on the
+    flight booking) and `flight.number_of_passengers` (total passengers on that booking).
+    Extract `hotel.reservation_holder` (primary guest name on hotel booking) and
+    `hotel.number_of_guests` (total guests listed on the hotel reservation).
+12. Employment document classification — set `employment.employment_doc_type` based on the
+    primary document present in the employment slot. This field is critical for downstream
+    validation: leave-date checks ONLY apply when the document type is 'HR Letter'.
+    Commercial Registry and Tax Card holders are self-employed and are not expected to have
+    an approved leave letter — do NOT set leave_approval_confirmed=False for them.
+13. Travel Itinerary Dates — carefully scan the travel itinerary document (if present) and 
+    extract every single date entry or sub-heading into the `itinerary_dates` array as 
+    YYYY-MM-DD. This is critical for cross-checking against flight/hotel dates.
 
 Return ONLY a valid JSON object matching this exact schema (no markdown fences, no extra keys):
 {schema_json}
@@ -622,6 +697,15 @@ def call_gemini_with_fallback(
         except Exception as exc:
             err_str = str(exc)
 
+            # Debugging Output
+            error_msg = f"Model {model_name} failed: {err_str}"
+            print(error_msg)
+            try:
+                import streamlit as st
+                st.toast(error_msg, icon="🚨")
+            except Exception:
+                pass
+
             if "404" in err_str or "NOT_FOUND" in err_str:
                 # Model endpoint not available — skip to next immediately
                 _log(f"❌ 404 NOT_FOUND for '{model_name}': {exc}. Trying next model…")
@@ -631,6 +715,16 @@ def call_gemini_with_fallback(
                 # Rate-limited — brief pause then try next model
                 _log(f"⚠️ 429 RESOURCE_EXHAUSTED for '{model_name}'. Waiting 3 s…")
                 time.sleep(3)
+                continue
+
+            if "503" in err_str or "UNAVAILABLE" in err_str:
+                # High demand — skip to next model immediately
+                _log(f"⚠️ 503 UNAVAILABLE for '{model_name}'. High demand, falling back…")
+                try:
+                    import streamlit as st
+                    st.warning(f"Model {model_name} experiencing high demand (503), falling back...")
+                except Exception:
+                    pass
                 continue
 
             # All other errors are hard failures — raise immediately
