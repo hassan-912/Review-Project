@@ -21,7 +21,7 @@ def _ltr(text):
     return "\u2066" + str(text) + "\u2069"
 
 
-def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en", client_name="") -> bytes:
+def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en", client_name="", writing=None) -> bytes:
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=18)
     for family in ("NotoSans", "NotoNaskhArabic"):
@@ -68,6 +68,23 @@ def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en
         if issue.found_value:
             row(f'{t("found", lang)}: {issue.found_value}', 9)
         row(f'{t("fix", lang)}: {fix}', 10)
+    from writing_review import writing_recommendations
+    writing = writing if writing is not None else writing_recommendations(extraction,lang)
+    pdf.ln(4)
+    row(t("writing_title",lang),13,True)
+    row(t("writing_note",lang),9)
+    for category,edits in writing.items():
+        row(t("doc_"+category,lang),11,True)
+        if not edits:
+            row(t("writing_ok",lang))
+        for edit in edits:
+            row(t("edit_"+edit.action,lang)+": "+edit.reason)
+            if edit.source_file:
+                row(t("source",lang)+": "+edit.source_file+(f" · {edit.page}" if edit.page else ""),9)
+            if edit.original_text:
+                row(t("original_text",lang)+": "+edit.original_text,9)
+            if edit.replacement:
+                row(t("replacement",lang)+": "+edit.replacement)
     pdf.ln(6)
     row(t("score_note", lang), 8, color=(80,96,122))
     return bytes(pdf.output())

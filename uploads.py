@@ -12,7 +12,7 @@ CATEGORIES = (
     "passport", "visa_form", "cover_letter", "hotel", "flight",
     "insurance", "employment", "travel_plan", "supporting",
 )
-SCHEMA_VERSION = "review-v2-hotels"
+SCHEMA_VERSION = "review-v3-strict-identity-writing"
 
 
 def files_hash(files: dict, model: str, lang: str = "en") -> str:

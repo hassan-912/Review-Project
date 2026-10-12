@@ -33,12 +33,31 @@ def valid_email(value: str) -> bool:
     return bool(len(value) <= 254 and re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value))
 
 
+def valid_username(value: str) -> bool:
+    return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{2,31}", value))
+
+
+def signup(client, username, email, password):
+    username = username.strip().lower()
+    if not valid_username(username):
+        raise AccountError("username_invalid")
+    if len(password) < 8:
+        raise AccountError("password_short")
+    if not valid_email(email):
+        raise AccountError("email_invalid")
+    existing = admin_client().table("profiles").select("id").eq("username", username).limit(1).execute().data
+    if existing:
+        raise AccountError("username_taken")
+    return client.auth.sign_up({"email":email,"password":password,"options":{"data":{"username":username},"email_redirect_to":setting("APP_URL")}})
+
+
 @dataclass(frozen=True)
 class Actor:
     user_id: str
     email: str
     approved: bool
     role: str
+    username: str = ""
 
 
 def verified_actor(client, session, require_admin=False, require_approved=True):
@@ -52,11 +71,11 @@ def verified_actor(client, session, require_admin=False, require_approved=True):
     if user is None:
         raise AccountError("session_expired")
     try:
-        rows = admin_client().table("profiles").select("is_approved,role").eq("id", user.id).limit(1).execute().data
+        rows = admin_client().table("profiles").select("is_approved,role,username").eq("id", user.id).limit(1).execute().data
     except Exception as exc:
         raise AccountError("auth_unavailable") from exc
     profile = rows[0] if rows else {}
-    actor = Actor(user.id, user.email or "", profile.get("is_approved") is True, profile.get("role", "user"))
+    actor = Actor(user.id, user.email or "", profile.get("is_approved") is True, profile.get("role", "user"), profile.get("username") or "")
     if require_approved and not actor.approved or require_admin and actor.role != "admin":
         raise AccountError("access_revoked")
     return actor
@@ -93,12 +112,12 @@ def restore_session(client, access_token, refresh_token):
     raise AccountError("session_expired")
 
 
-def reserve_review(client, session):
+def reserve_review(client, session, request_id=None, client_name=""):
     actor = verified_actor(client, session)
     try:
         allowed = admin_client().rpc("reserve_review_attempt", {
             "p_user_id": actor.user_id,
-            "p_request_id": str(uuid.uuid4()),
+            "p_request_id": request_id or str(uuid.uuid4()),
             "p_hourly_limit": positive_int("REVIEWS_PER_HOUR", 5),
             "p_daily_limit": positive_int("REVIEWS_PER_DAY", 20),
         }).execute().data
@@ -106,6 +125,8 @@ def reserve_review(client, session):
         raise AccountError("quota_unavailable") from exc
     if allowed is not True:
         raise AccountError("rate_limited")
+    if request_id:
+        admin_client().table("review_attempts").update({"client_name":client_name,"submitted_username":actor.username,"submitted_by":actor.email,"status":"running"}).eq("request_id",request_id).eq("user_id",actor.user_id).execute()
     return actor
 
 
@@ -124,12 +145,12 @@ def set_approval(client, session, target_id: str, approved: bool):
 
 def team_profiles(client, session):
     verified_actor(client, session, require_admin=True)
-    return admin_client().table("profiles").select("id,email,is_approved,role").order("email").limit(1000).execute().data or []
+    return admin_client().table("profiles").select("id,email,username,is_approved,role").order("username").limit(1000).execute().data or []
 
 
 def review_logs(client, session, team=False):
     actor = verified_actor(client, session, require_admin=team)
-    query = admin_client().table("review_logs").select("client_name,submitted_by,score,timestamp")
+    query = admin_client().table("review_logs").select("client_name,submitted_by,submitted_username,score,timestamp")
     if not team:
         query = query.eq("user_id", actor.user_id)
     return query.order("timestamp", desc=True).limit(1000).execute().data or []
@@ -140,6 +161,17 @@ def log_review(client, session, client_name, country, score):
     admin_client().table("review_logs").insert({
         "client_name": client_name.replace(":::", " ").strip() + ":::" + (country or ""),
         "submitted_by": actor.email,
+        "submitted_username": actor.username,
         "user_id": actor.user_id,
         "score": round(score, 1),
     }).execute()
+
+
+def finish_attempt(client, session, request_id, score=None):
+    actor = verified_actor(client, session)
+    admin_client().table("review_attempts").update({"status":"completed" if score is not None else "failed","score":score}).eq("request_id",request_id).eq("user_id",actor.user_id).execute()
+
+
+def team_attempts(client, session):
+    verified_actor(client, session, require_admin=True)
+    return admin_client().table("review_attempts").select("client_name,submitted_username,submitted_by,score,requested_at,status").order("requested_at",desc=True).limit(1000).execute().data or []

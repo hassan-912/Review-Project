@@ -118,6 +118,38 @@ after the production redirect URL is configured. Existing users and reviews are 
 
 ## Rollback
 
+### October 12 follow-up release
+
+- Visible native borders for signup, login, password recovery and client-name inputs;
+  all interface animations and transitions disabled. PDF bytes are reused per browser
+  session/report/language rather than rebuilt on every report interaction.
+- Signup requires a unique lowercase username (3–32 ASCII letters/numbers/dot/hyphen/
+  underscore, starting with a letter/number). Signup and password recovery require eight
+  characters without composition rules; the matching Auth setting was saved in Supabase.
+  Existing login remains email and password. Existing profiles have usernames derived
+  from their email; no account role or approval changed.
+- Applied `review_usernames_and_attempt_attribution` from `supabase/usernames.sql`.
+  Reviews retain verified profile usernames and reviewer emails. Admin attempts include
+  running/interrupted, completed, failed and legacy rows. Failed/legacy reviews show no
+  invented score; quotas still count failed analyses. Cache hits appear in completed
+  review history and do not consume another model-analysis allowance.
+- Added exact identity comparisons (including every booking/page), passport issue/expiry
+  and national-ID number/issue/expiry comparisons against their own source documents.
+  Name token subsets, spelling changes and initials never pass as matches. Typography
+  and ordering may differ. Missing/unreadable required data and uncertain cross-script
+  names need manual verification. AI extraction is not an absolute OCR guarantee.
+- Combined cover-letter/travel-plan files are classified by content. Specific proposed
+  add/remove/replace/verify edits appear in the interface and both-language PDFs. Quotes
+  are checked against their section and, for text PDFs, the actual uploaded text.
+  Advice is separate from scoring, includes daily-plan gaps, and never invents facts.
+- Database signup/uniqueness/authorization/attempt assertions passed inside a rolled-back
+  transaction. Review-log client writes were revoked to prevent forged attribution.
+  The score formula is unchanged; the newly critical discrepancies affect its inputs.
+
+The username migration requires username-aware signup code. If reverting to an earlier
+app release, keep a compatible username-generating signup trigger or temporarily disable
+new signup during rollback. Do not drop usernames or existing review data.
+
 The pre-release redesign is preserved in commit `47f662d`. Local source backup:
 `C:\Users\Menna\Documents\projects\Review_pre_production_20261012`.
 To roll back the app, deploy a known working Git commit or branch through Community Cloud.

@@ -23,7 +23,7 @@ import re
 import time
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
+from typing import Optional, Literal
 
 import pymupdf as fitz  # Local PDF text extraction to cut token payload
 from google import genai
@@ -110,6 +110,9 @@ class PassportInfo(BaseModel):
     nationality: Optional[str] = Field(None, description="Nationality / issuing country")
     passport_expiry: Optional[str] = Field(None, description="Passport expiry date YYYY-MM-DD")
     gender: Optional[str] = None
+    given_names: Optional[str] = None
+    surname: Optional[str] = None
+    passport_issue: Optional[str] = Field(None, description="Date of issue on passport visual page, not MRZ; YYYY-MM-DD")
 
 
 class FlightInfo(BaseModel):
@@ -120,6 +123,9 @@ class FlightInfo(BaseModel):
     destination_city: Optional[str] = None
     booking_reference: Optional[str] = None
     passenger_name: Optional[str] = None
+    passport_number: Optional[str] = None
+    passport_issue: Optional[str] = None
+    passport_expiry: Optional[str] = None
 
 
 class HotelInfo(BaseModel):
@@ -129,6 +135,9 @@ class HotelInfo(BaseModel):
     hotel_name: Optional[str] = None
     city: Optional[str] = None
     guest_name: Optional[str] = None
+    passport_number: Optional[str] = None
+    passport_issue: Optional[str] = None
+    passport_expiry: Optional[str] = None
     booking_reference: Optional[str] = None
 
 
@@ -212,6 +221,76 @@ class VisaApplicationInfo(BaseModel):
     purpose_of_journey: Optional[str] = None
     intended_arrival: Optional[str] = None
     intended_departure: Optional[str] = None
+    given_names: Optional[str] = None
+    surname: Optional[str] = None
+    passport_issue: Optional[str] = None
+    passport_expiry: Optional[str] = None
+    national_id_number: Optional[str] = None
+    national_id_issue: Optional[str] = None
+    national_id_expiry: Optional[str] = None
+
+
+class NationalIDInfo(BaseModel):
+    present: bool = False
+    full_name: Optional[str] = None
+    id_number: Optional[str] = None
+    issue_date: Optional[str] = None
+    expiry_date: Optional[str] = None
+
+
+class IdentityEvidence(BaseModel):
+    """One applicant identity block per source/page; no merged conflicting values."""
+    document: Literal["visa_form", "hotel", "flight", "insurance", "cover_letter", "travel_plan", "supporting", "passport", "national_id", "employment"]
+    source_file: str
+    page: Optional[int] = Field(None, ge=1)
+    full_name: Optional[str] = None
+    given_names: Optional[str] = None
+    surname: Optional[str] = None
+    passport_number: Optional[str] = None
+    passport_issue: Optional[str] = None
+    passport_expiry: Optional[str] = None
+    national_id_number: Optional[str] = None
+    national_id_issue: Optional[str] = None
+    national_id_expiry: Optional[str] = None
+    unreadable_fields: list[str] = Field(default_factory=list, description="Fields visibly present but unclear; never guess characters or ambiguous dates")
+
+
+class WritingRecommendation(BaseModel):
+    action: Literal["add", "remove", "replace", "verify"]
+    source_file: Optional[str] = None
+    page: Optional[int] = Field(None, ge=1)
+    original_text: Optional[str] = Field(None, description="Exact verbatim words from this section only. Required for remove/replace.")
+    reason: str
+    replacement: Optional[str] = Field(None, description="Concrete proposed wording grounded in evidence; bracketed placeholders for missing facts")
+
+
+class TravelDay(BaseModel):
+    date: Optional[str] = None
+    city: Optional[str] = None
+    accommodation: Optional[str] = None
+    activities: list[str] = Field(default_factory=list)
+    transport: Optional[str] = None
+
+    @field_validator("activities",mode="before")
+    @classmethod
+    def empty_activities(cls,value):
+        return [] if value is None else value
+
+
+class NarrativeSection(BaseModel):
+    present: bool = False
+    source_files: list[str] = Field(default_factory=list)
+    source_text: Optional[str] = Field(None, description="Verbatim section text only, excluding other sections in a combined file")
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    cities: list[str] = Field(default_factory=list)
+    days: list[TravelDay] = Field(default_factory=list)
+    recommendations: list[WritingRecommendation] = Field(default_factory=list, max_length=10)
+
+    @field_validator("source_files","cities","days","recommendations",mode="before")
+    @classmethod
+    def empty_lists(cls,value):
+        return [] if value is None else value
 
 
 class VisaDocumentExtraction(BaseModel):
@@ -227,10 +306,15 @@ class VisaDocumentExtraction(BaseModel):
     business: BusinessInfo = Field(default_factory=BusinessInfo)  # type: ignore
     employment: EmploymentInfo = Field(default_factory=EmploymentInfo)  # type: ignore
     visa_form: VisaApplicationInfo = Field(default_factory=VisaApplicationInfo)  # type: ignore
+    national_id: NationalIDInfo = Field(default_factory=NationalIDInfo)
+    identity_evidence: list[IdentityEvidence] = Field(default_factory=list)
+    cover_letter_text: NarrativeSection = Field(default_factory=NarrativeSection)
+    travel_plan: NarrativeSection = Field(default_factory=NarrativeSection)
+    detected_documents: list[str] = Field(default_factory=list)
     main_schengen_destination: Optional[str] = Field(
         None, description="Country where applicant will spend the most nights"
     )
-    total_nights_per_country: Optional[dict] = Field(
+    total_nights_per_country: Optional[dict[str,int]] = Field(
         None, description="Mapping of country -> number of nights planned"
     )
     travel_cities: Optional[list[str]] = Field(
@@ -246,6 +330,18 @@ class VisaDocumentExtraction(BaseModel):
     executive_summary: Optional[str] = None
     urgent_actions: list[str] = Field(default_factory=list)
     model_used: Optional[str] = Field(None, exclude=True)
+
+    @field_validator("passport","flight","insurance","cover_letter","business","employment","visa_form","national_id","cover_letter_text","travel_plan",mode="before")
+    @classmethod
+    def absent_sections(cls,value):
+        # Providers sometimes emit null for an absent document. Preserve missing evidence
+        # as an empty model so validation can flag it, without inventing any fields.
+        return {} if value is None else value
+
+    @field_validator("identity_evidence","detected_documents","urgent_actions",mode="before")
+    @classmethod
+    def absent_arrays(cls,value):
+        return [] if value is None else value
 
     @field_validator("hotel", mode="before")
     @classmethod
@@ -294,8 +390,8 @@ def _build_extraction_prompt(doc_labels: list[str], lang: str = "en") -> str:
     Build the master extraction prompt that instructs Gemini to parse
     all uploaded documents and return structured JSON.
     """
-    schema_json = json.dumps(VisaDocumentExtraction.model_json_schema(), indent=2)
     doc_list = "\n".join(f"  - {label}" for label in doc_labels)
+    schema_json = json.dumps(VisaDocumentExtraction.model_json_schema(), separators=(",",":"))
     report_language = "Modern Standard Arabic" if lang == "ar" else "English"
 
     return f"""You are an expert Schengen visa document analyst.
@@ -310,6 +406,37 @@ or English so deterministic validation works identically in both languages.
 Write executive_summary, urgent_actions and raw_extraction_notes in {report_language}.
 Summarize evidence and uncertainties; do not predict consular approval or invent a verdict.
 Extract EVERY accommodation booking into the hotel array, one entry per booking. Use [] if absent.
+
+CONTENT CLASSIFICATION AND STRICT TRANSCRIPTION:
+Upload categories and filenames are hints, never proof of document type. Read every page.
+A single file can contain BOTH a cover letter and a day-by-day travel plan. Populate
+cover_letter, cover_letter_text AND travel_plan from their respective sections even when
+uploaded once under either category. Record source_files and page numbers.
+Populate detected_documents with every actual type found, including national_id when supplied.
+Transcribe identities independently: NEVER silently fix typos or copy passport values into
+application, hotel or flight fields. Preserve first/given names and surname exactly.
+Never fuzzy-match, expand initials or confuse O/0 or I/1. Extract passport_issue from the
+printed passport field (not MRZ). Keep national ID dates/number separate from passport.
+Do not invent ID expiry when not printed. Do not invent Latin transliteration of Arabic ID
+names; flag script ambiguity for human verification when no official transcription exists.
+Create identity_evidence for EVERY applicant block in EVERY application/booking/page,
+including multiple flight reservations. Exclude companions; flag ambiguity in unreadable_fields.
+Include conflicting versions, never choose only a matching one. Use null for unreadable fields.
+
+ACTIONABLE WRITING REVIEW:
+For cover_letter_text and travel_plan provide specific add/remove/replace/verify recommendations
+when needed, in {report_language}. Quote the EXACT offending keyword/sentence as original_text
+with source file/page; recommend concrete alternative wording and explain why.
+Check vague purpose, template leftovers, contradictions, unsupported claims, dates, funding,
+document references, hotel/city alignment, plausible day-by-day routing and missing days.
+Populate travel_plan.days only from actual day-by-day entries in the supplied section. Never
+invent activities or expand a city/date range into made-up daily rows. No daily entries => [].
+Do not stop at 'case is explained'. If a section is good, return [] instead of inventing faults.
+NEVER invent assets, family ties, salary, sponsorship, reservations, activities or intention
+to return. Missing facts require [placeholders] and verification. Never suggest concealing
+true work/settlement intent or deleting material facts to misrepresent eligibility.
+Removal is for template debris/redundancy, not hiding relevant facts. source_text must be
+verbatim text of its OWN section so quoted edits can be checked.
 
 ⚠️  CRITICAL IDENTITY EXTRACTION RULES (STRICT):
 - Extract `passport.passport_number`, `passport.full_name`, and `passport.date_of_birth` EXCLUSIVELY
@@ -336,10 +463,13 @@ Pay close attention to:
 9. Cities — compile a complete list of ALL cities mentioned in hotel reservations and the
    travel itinerary. Store them in `travel_cities` as a JSON array of strings.
 
-Return ONLY a valid JSON object matching this exact schema (no markdown fences, no extra keys):
+Return ONLY a valid JSON object matching the response schema supplied with the request
+(no markdown fences, no extra keys).
 {schema_json}
 
-If a value cannot be determined from the documents, use null.
+Use null ONLY for nullable fields. For absent lists use [], absent mappings use null if
+nullable, and absent sections use present=false. Identity document types must use the
+exact enum codes in the schema, never display labels. A recommendation reason is always text.
 Fill raw_extraction_notes with any ambiguities or uncertainties you encountered.
 """
 
@@ -689,9 +819,8 @@ def call_gemini_with_fallback(
                     config=types.GenerateContentConfig(
                         system_instruction=MG_SYSTEM_INSTRUCTION,
                         temperature=0.0,        # Deterministic extraction
-                        max_output_tokens=8192,
-                        # response_mime_type is intentionally omitted — it causes
-                        # 400/404 on some endpoint versions; we parse JSON ourselves.
+                        max_output_tokens=16384,
+                        response_mime_type="application/json",
                     ),
                 )
                 _log(f"✅ Success with model '{model_name}' on attempt {attempt}.")

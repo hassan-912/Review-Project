@@ -19,6 +19,9 @@ from datetime import date, datetime
 from calendar import monthrange
 from enum import Enum
 from typing import Optional
+from collections import Counter
+import re
+import unicodedata
 
 from pydantic import BaseModel, model_validator
 
@@ -57,8 +60,10 @@ class ValidationIssue(BaseModel):
     def localized_messages(self):
         from i18n import issue_translation, field_label
         self.message_key = self.message_key or "field." + self.field_name
-        self.title_en = field_label(self.field_name, "en")
-        self.title_ar, self.fix_ar = issue_translation(self.message_key, self.field_name)
+        self.title_en = self.title_en or field_label(self.field_name, "en")
+        title_ar, fix_ar = issue_translation(self.message_key, self.field_name)
+        self.title_ar = self.title_ar or title_ar
+        self.fix_ar = self.fix_ar or fix_ar
         return self
 
 
@@ -101,27 +106,15 @@ def _tokens(text: Optional[str]) -> set[str]:
 # ---------------------------------------------------------------------------
 
 def _names_match(name_a: Optional[str], name_b: Optional[str]) -> bool:
-    """
-    Fuzzy case-insensitive name match.
-
-    Returns True if the two names are considered the same person by checking:
-    1. Full string equality (after normalisation)
-    2. Whether all tokens in the shorter name are present in the longer name
-       (handles middle-name omissions and re-ordered name parts).
-    """
+    """Exact name tokens, ignoring only typography and ordering; no fuzzy subsets."""
     if not name_a or not name_b:
-        return True   # Cannot flag a mismatch if either side is missing
-    a = name_a.strip().upper()
-    b = name_b.strip().upper()
-    if a == b:
-        return True
-    tokens_a = set(a.replace(",", "").split())
-    tokens_b = set(b.replace(",", "").split())
-    shorter = tokens_a if len(tokens_a) <= len(tokens_b) else tokens_b
-    longer  = tokens_b if len(tokens_a) <= len(tokens_b) else tokens_a
-    # At least surname AND one given-name token must match
-    common = shorter & longer
-    return len(common) >= min(2, len(shorter))
+        return False
+    def parts(value):
+        # Only typography and order are ignored. Never remove accents, expand initials,
+        # use token subsets, or autocorrect a character. Counter preserves duplicates.
+        value = unicodedata.normalize("NFC", value).upper()
+        return Counter(re.sub(r"[<,\-/]+", " ", value).split())
+    return parts(name_a) == parts(name_b)
 
 
 def accommodation_window(data):
@@ -204,10 +197,9 @@ def _check_identity_name_crosscheck(data: VisaDocumentExtraction) -> list[Valida
             expected_value=passport_name,
             severity=Severity.CRITICAL,
             recommended_fix=(
-                f"CRITICAL: Wrong Passport Attached! "
-                f"Passport document belongs to '{passport_name}', "
-                f"but Visa Application Form belongs to '{visa_form_name}'. "
-                "Ensure the correct passport is scanned for this application."
+                f"Name mismatch: passport '{passport_name}', application '{visa_form_name}'. "
+                "Verify the applicant and correct the application to the passport spelling. "
+                "Do not submit until every given name and surname has been checked."
             ),
         ))
 
@@ -227,7 +219,7 @@ def _check_identity_name_crosscheck(data: VisaDocumentExtraction) -> list[Valida
                 field_name="applicant_name",
                 found_value=found_name,
                 expected_value=passport_name,
-                severity=Severity.HIGH,
+                severity=Severity.CRITICAL,
                 recommended_fix=(
                     f"Name '{found_name}' in {doc_name} does not clearly match "
                     f"passport name '{passport_name}'. "
@@ -833,6 +825,23 @@ def run_validation(data: VisaDocumentExtraction) -> list[ValidationIssue]:
     all_issues.extend(_check_employment_leave_dates(data))
     all_issues.extend(_check_employment_consistency(data))
     all_issues.extend(_check_missing_fields(data))
+    from identity_checks import strict_identity_checks
+    all_issues.extend(strict_identity_checks(data, all_issues))
+
+    # Summary fields and source-level identity rows can report the same typo. Keep the
+    # detailed source row and deduct once per distinct discrepancy, not twice.
+    deduped={}
+    for issue in all_issues:
+        identity=issue.message_key.startswith("identity.") or issue.message_key in ("validation.02","validation.03","validation.04")
+        if identity:
+            doc=issue.document_name.split(" (")[0]
+            field="full_name" if issue.field_name=="applicant_name" else issue.field_name
+            key=(doc,field,issue.found_value,issue.expected_value)
+            if key not in deduped or issue.message_key.startswith("identity."):
+                deduped[key]=issue
+        else:
+            deduped[("rule",len(deduped))]=issue
+    all_issues=list(deduped.values())
 
     # Sort: CRITICAL → HIGH → MEDIUM → LOW
     severity_order = {

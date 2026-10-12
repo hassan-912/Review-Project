@@ -21,7 +21,9 @@ h1 {font-size:2.2rem !important; line-height:1.2;}
 .stCaption,[data-testid="stCaptionContainer"] {color:var(--muted);}
 [data-testid="stVerticalBlockBorderWrapper"]>div {background:var(--surface); border-color:var(--border); border-radius:12px;}
 [data-testid="stTextInput"] input,button,[role="checkbox"],[role="radio"] {min-height:44px;}
-.stTextInput [data-baseweb="input"] {border:1px solid var(--border); border-radius:8px;}
+[data-testid="stTextInput"] [data-baseweb="input"], [data-testid="stTextArea"] textarea {border:1px solid #7B8DA6 !important; border-radius:8px; background:#FFFFFF;}
+[data-testid="stTextInput"] [data-baseweb="input"]:focus-within {border-color:var(--brand) !important; box-shadow:0 0 0 1px var(--brand);}
+.stApp *, .stApp *::before, .stApp *::after {animation:none !important; transition:none !important; scroll-behavior:auto !important;}
 button:focus-visible,input:focus-visible {outline:3px solid var(--brand); outline-offset:3px;}
 .brand-mark {display:inline-flex; align-items:center; justify-content:center; border-radius:10px; background:var(--brand); color:var(--surface); width:46px; height:46px; font-weight:700;}
 .eyebrow {color:var(--brand); font-weight:600; font-size:.82rem;}
@@ -39,13 +41,12 @@ button:focus-visible,input:focus-visible {outline:3px solid var(--brand); outlin
 .step.active {border-color:var(--brand);}
 .step h4 {margin:.45rem 0; font-size:1rem;}
 .skeleton {padding:1.5rem; border:1px solid var(--border); border-radius:12px; background:var(--surface);}
-.skeleton i {display:block; height:16px; margin:14px 0; border-radius:6px; background:linear-gradient(90deg,var(--page),var(--border),var(--page)); background-size:200% 100%; animation:shimmer 1.5s infinite;}
-@keyframes shimmer {to {background-position:-200% 0;}}
+.skeleton i {display:block; height:16px; margin:14px 0; border-radius:6px; background:var(--border);}
 .timeline {width:100%; border-collapse:collapse; font-size:.9rem;}
 .timeline td,.timeline th {border-bottom:1px solid var(--border); padding:.7rem .3rem; text-align:start;}
 .timeline th {color:var(--muted); font-weight:500;}
 .ltr {direction:ltr; unicode-bidi:isolate; display:inline-block;}
-.st-key-email input,.st-key-login_email input,.st-key-signup_email input,.st-key-reset_email input,[data-testid="stNumberInput"] input {direction:ltr; text-align:left;}
+.st-key-email input,.st-key-login_email input,.st-key-signup_email input,.st-key-reset_email input,.st-key-signup_username input,[data-testid="stNumberInput"] input {direction:ltr; text-align:left;}
 [data-testid="stFileUploaderDropzone"] {border:1px dashed var(--border); border-radius:10px;}
 [class*="st-key-slot_filled"] [data-testid="stFileUploaderDropzone"] {border:1px solid var(--brand);}
 [data-testid="stFileUploaderDropzoneInstructions"] {display:none;}

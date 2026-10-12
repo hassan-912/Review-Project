@@ -60,3 +60,18 @@ def test_quota_service_error_fails_closed(monkeypatch):
     monkeypatch.setattr(accounts,'verified_actor',lambda *args,**kw:accounts.Actor('id','test@example.com',True,'user'))
     monkeypatch.setattr(accounts,'admin_client',Mock(side_effect=RuntimeError()))
     with pytest.raises(AccountError,match='quota_unavailable'):accounts.reserve_review(Mock(),object())
+
+
+def test_review_log_uses_verified_profile_username(monkeypatch):
+    monkeypatch.setattr(accounts,'verified_actor',lambda *a,**kw:accounts.Actor('uid','reviewer@example.com',True,'user','trusted.reviewer'))
+    db=Mock();monkeypatch.setattr(accounts,'admin_client',lambda:db)
+    accounts.log_review(Mock(),object(),'FICTIONAL','France',65)
+    row=db.table.return_value.insert.call_args.args[0]
+    assert row['submitted_username']=='trusted.reviewer' and row['user_id']=='uid' and row['score']==65
+
+
+def test_failed_attempt_has_no_invented_score(monkeypatch):
+    monkeypatch.setattr(accounts,'verified_actor',lambda *a,**kw:accounts.Actor('uid','reviewer@example.com',True,'user','trusted.reviewer'))
+    db=Mock();monkeypatch.setattr(accounts,'admin_client',lambda:db)
+    accounts.finish_attempt(Mock(),object(),'request')
+    assert db.table.return_value.update.call_args.args[0]=={'status':'failed','score':None}

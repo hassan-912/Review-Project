@@ -25,6 +25,7 @@ from pdf_report import build_pdf_report, score_badge
 from review_pipeline import review_documents
 from validator import _parse_date, accommodation_window, _SCHENGEN_CITIES
 from recovery import recovery_tokens
+from writing_review import writing_recommendations
 
 logger = logging.getLogger(__name__)
 
@@ -151,15 +152,18 @@ def render_auth_screen():
         mode = st.segmented_control(t("navigation"), ["sign_in","create_account","forgot_password"],
                                     default="sign_in", required=True, format_func=t, key="access_mode")
         with st.form("auth_form"):
+            username = st.text_input(t("username"),key="signup_username",max_chars=32,help=t("username_hint")).strip() if mode == "create_account" else ""
             email = st.text_input(t("email"), key="email", max_chars=254).strip()
             password = st.text_input(t("password"), type="password", key="password") if mode != "forgot_password" else ""
+            if mode == "create_account":
+                st.caption(t("password_short"))
             confirm = st.text_input(t("confirm_password"), type="password", key="confirm_password") if mode == "create_account" else ""
             submitted = st.form_submit_button(t("reset_send" if mode == "forgot_password" else mode), type="primary", width="stretch")
         if submitted:
             if not accounts.valid_email(email):
                 st.error(t("email_invalid"))
                 return
-            if mode == "create_account" and (len(password) < 10 or password != confirm):
+            if mode == "create_account" and (len(password) < 8 or password != confirm):
                 st.error(t("password_mismatch"))
                 return
             try:
@@ -173,7 +177,7 @@ def render_auth_screen():
                     _refresh_actor()
                     st.rerun()
                 elif mode == "create_account":
-                    client.auth.sign_up({"email":email,"password":password})
+                    accounts.signup(client,username,email,password)
                     # Signup can auto-create an SDK session; it must never grant app access.
                     st.session_state.auth_client = None
                     st.success(t("signup_success"))
@@ -222,7 +226,7 @@ def handle_recovery():
         confirm = st.text_input(t("confirm_password"),type="password")
         submit = st.form_submit_button(t("save_password"),type="primary")
     if submit:
-        if len(password) < 10 or password != confirm:
+        if len(password) < 8 or password != confirm:
             st.error(t("password_mismatch"))
         else:
             try:
@@ -262,6 +266,7 @@ def render_upload_ui():
         force = st.checkbox(t("force_refresh"),help=t("force_help"),key="force_refresh")
     st.subheader(t("upload_title"))
     st.caption(t("upload_hint"))
+    st.caption(t("combined_hint"))
     uploaded={}
     icons=("badge","description","article","hotel","flight","health_and_safety","work","map","folder")
     for offset in range(0, len(CATEGORIES),3):
@@ -306,6 +311,9 @@ def run_review(uploaded_files,model_id,client_name,force_refresh=False):
     cache={k:v for k,v in st.session_state.review_cache.items() if now-v[0]<1800}
     st.session_state.review_cache=cache
     progress=st.empty(); skeleton=st.empty()
+    attempt_id=None
+    attempt_finished=False
+    attempt_score=None
     try:
         _refresh_actor()
         client=get_auth_client(); session=st.session_state.supabase_session
@@ -314,7 +322,8 @@ def run_review(uploaded_files,model_id,client_name,force_refresh=False):
             result=cache[key][1].copy()
             st.info(t("cached"))
         else:
-            accounts.reserve_review(client,session)
+            attempt_id=str(uuid.uuid4())
+            accounts.reserve_review(client,session,request_id=attempt_id,client_name=client_name)
             skeleton.html('<div class="skeleton"><i></i><i></i><i></i></div>')
             def update(step):
                 with progress.container():
@@ -328,6 +337,13 @@ def run_review(uploaded_files,model_id,client_name,force_refresh=False):
         _refresh_actor()
         accounts.verified_actor(client,st.session_state.supabase_session)
         st.session_state.review_result=result
+        attempt_score=result["score"].score
+        if attempt_id:
+            try:
+                accounts.finish_attempt(client,st.session_state.supabase_session,attempt_id,result["score"].score)
+                attempt_finished=True
+            except Exception:
+                st.warning(t("log_failed"))
         try:
             accounts.log_review(client,st.session_state.supabase_session,client_name,
                                 result["extraction"].main_schengen_destination,result["score"].score)
@@ -342,6 +358,11 @@ def run_review(uploaded_files,model_id,client_name,force_refresh=False):
         logger.error("Review failed; reference=%s",reference)
         st.error(t("review_failed",reference=reference))
     finally:
+        if attempt_id and not attempt_finished:
+            try:
+                accounts.finish_attempt(get_auth_client(),st.session_state.supabase_session,attempt_id,attempt_score)
+            except Exception:
+                logger.warning("Attempt status update unavailable")
         skeleton.empty()
 
 
@@ -437,6 +458,26 @@ def render_report(result):
                 known=bool(data.travel_cities) and all(c.lower() in _SCHENGEN_CITIES for c in data.travel_cities)
                 st.write(t("tourism_known" if known else "tourism_check"))
         render_fix_checklist(issues)
+    writing=result.get("writing") or writing_recommendations(data,st.session_state.lang)
+    st.subheader(t("writing_title"))
+    st.caption(t("writing_note"))
+    for column,key in zip(st.columns(2),("cover_letter","travel_plan")):
+        with column,st.container(border=True,key="card_writing_"+key):
+            st.subheader(t("doc_"+key))
+            section=data.cover_letter_text if key=="cover_letter" else data.travel_plan
+            if section.source_files:
+                st.text(t("source")+": "+", ".join(section.source_files))
+            if not writing[key]:
+                st.write(t("writing_ok"))
+            for edit in writing[key]:
+                st.markdown("**"+t("edit_"+edit.action)+"**")
+                if edit.source_file:
+                    st.text(edit.source_file+(f" · {edit.page}" if edit.page else ""))
+                if edit.original_text:
+                    st.text(t("original_text")+": "+edit.original_text)
+                st.text(edit.reason)
+                if edit.replacement:
+                    st.text(t("replacement")+": "+edit.replacement)
     audit_left,audit_right=st.columns(2)
     with audit_left,st.expander(t("cover_audit")):
         for key in ("purpose_of_visit","funding_source","ties_to_home_country","attached_documents_listed","employer_mentioned"):
@@ -448,11 +489,14 @@ def render_report(result):
             if isinstance(value,bool): value=t("yes" if value else "no")
             st.text(field_label(key,st.session_state.lang)+": "+isolated_value(value or t("unknown"),st.session_state.lang))
     with st.expander(t("extracted")):
-        for key in ("full_name","passport_number","date_of_birth","passport_expiry"):
+        for key in ("full_name","given_names","surname","passport_number","date_of_birth","passport_issue","passport_expiry"):
             st.text(field_label(key,st.session_state.lang)+": "+isolated_value(getattr(data.passport,key) or t("unknown"),st.session_state.lang))
         if data.raw_extraction_notes: st.text(data.raw_extraction_notes)
     try:
-        pdf=build_pdf_report(data,issues,score,result["biz_result"],st.session_state.lang,result["client_name"])
+        pdfs=result.setdefault("pdfs",{})
+        if st.session_state.lang not in pdfs:
+            pdfs[st.session_state.lang]=build_pdf_report(data,issues,score,result["biz_result"],st.session_state.lang,result["client_name"],writing)
+        pdf=pdfs[st.session_state.lang]
         st.download_button(t("download_pdf"),pdf,file_name="MG-review.pdf",mime="application/pdf",icon=":material/download:")
     except Exception:
         st.warning(t("pdf_failed"))
@@ -462,23 +506,26 @@ def normalized_logs(logs):
     rows=[]
     for row in logs:
         client,_,country=(row.get("client_name") or "").partition(":::")
-        timestamp=row.get("timestamp") or ""
+        timestamp=row.get("timestamp") or row.get("requested_at") or ""
         try:
             timestamp=datetime.fromisoformat(timestamp.replace("Z","+00:00")).astimezone(ZoneInfo("Africa/Cairo")).strftime("%Y-%m-%d %H:%M")
         except ValueError:
             pass
-        rows.append({"client_name":client,"country":country or t("unknown"),"agent":row.get("submitted_by") or "",
-                     "latest_score":float(row.get("score") or 0),"date":timestamp})
+        entry={"client_name":client,"country":country or t("unknown"),"agent":row.get("submitted_username") or row.get("submitted_by") or "",
+               "agent_email":row.get("submitted_by") or "", "latest_score":float(row["score"]) if row.get("score") is not None else "—","date":timestamp}
+        if "status" in row:
+            entry["status"]=t(row.get("status") or "legacy")
+        rows.append(entry)
     return rows
 
 
-def render_logs(rows,team=False):
-    search=st.text_input(t("search"),key="log_search").strip().casefold()
+def render_logs(rows,team=False,key_prefix="log"):
+    search=st.text_input(t("search"),key=key_prefix+"_search").strip().casefold()
     filtered=[r for r in rows if search in ' '.join(str(v) for v in r.values()).casefold()]
     if not filtered:
         st.info(t("no_results")); return
     pages=max(1,(len(filtered)+24)//25)
-    page=st.number_input(t("page"),min_value=1,max_value=pages,value=1,step=1,key="log_page")
+    page=st.number_input(t("page"),min_value=1,max_value=pages,value=1,step=1,key=key_prefix+"_page")
     shown=filtered[(int(page)-1)*25:int(page)*25]
     displayed=[]
     for row in shown:
@@ -488,13 +535,13 @@ def render_logs(rows,team=False):
     st.dataframe(displayed,hide_index=True,width="stretch")
     if team:
         buffer=StringIO(); writer=csv.writer(buffer)
-        fields=["client_name","country","agent","latest_score","date"]
+        fields=list(filtered[0])
         writer.writerow([t(key) for key in fields])
         for row in filtered:
             values=[row[key] for key in fields]
             # Spreadsheet formula injection can originate from client names or agent emails.
             writer.writerow(["'"+v if isinstance(v,str) and v.lstrip().startswith(("=","+","-","@")) else v for v in values])
-        st.download_button(t("export_csv"),buffer.getvalue().encode("utf-8-sig"),file_name="MG-reviews.csv",mime="text/csv")
+        st.download_button(t("export_csv"),buffer.getvalue().encode("utf-8-sig"),file_name="MG-reviews.csv",mime="text/csv",key=key_prefix+"_csv")
 
 
 def render_my_history():
@@ -510,7 +557,7 @@ def render_my_history():
     for row in rows:
         name=row["client_name"]
         counts[name]=counts.get(name,0)+1
-        grouped.setdefault(name,{k:v for k,v in row.items() if k!="agent"})
+        grouped.setdefault(name,{k:v for k,v in row.items() if k not in ("agent","agent_email")})
     for name,row in grouped.items():
         row["edits_done"]=t("yes" if counts[name]>1 else "no")
     st.caption(t("log_scope",count=len(rows)))
@@ -523,12 +570,13 @@ def render_admin_dashboard():
         client=get_auth_client(); session=st.session_state.supabase_session
         profiles=accounts.team_profiles(client,session)
         rows=normalized_logs(accounts.review_logs(client,session,team=True))
+        attempts=normalized_logs(accounts.team_attempts(client,session))
     except Exception:
         st.error(t("history_failed")); return
     pending=sum(not p.get("is_approved") for p in profiles)
     columns=st.columns(3)
     for column,key,value in zip(columns,("total_reviews","pending_count","average_score"),
-                                (len(rows),pending,f'{sum(r["latest_score"] for r in rows)/len(rows):.0f}%' if rows else "—")):
+                                (len(rows),pending,f'{sum(r["latest_score"] for r in rows if isinstance(r["latest_score"],(int,float)))/len(rows):.0f}%' if rows else "—")):
         column.metric(t(key),value,border=True)
     st.caption(t("log_scope",count=len(rows)))
     st.subheader(t("approval_queue"))
@@ -536,7 +584,8 @@ def render_admin_dashboard():
         with st.container(border=True,key="card_profile_"+profile["id"]):
             identity,action=st.columns([4,1])
             with identity:
-                st.text(profile.get("email") or profile["id"])
+                st.text(profile.get("username") or profile.get("email") or profile["id"])
+                st.text(profile.get("email") or "")
                 st.html(pill("approved" if profile.get("is_approved") else "pending", "success" if profile.get("is_approved") else "waiting"))
             with action:
                 approved=bool(profile.get("is_approved"))
@@ -550,6 +599,9 @@ def render_admin_dashboard():
                         st.error(t(str(exc)))
     st.subheader(t("review_log"))
     render_logs(rows,team=True)
+    with st.expander(t("attempts")):
+        st.caption(t("attempts_hint"))
+        render_logs(attempts,team=True,key_prefix="attempts")
 
 
 def render_how_it_works():
@@ -591,7 +643,7 @@ def main():
     with out:
         if st.button(t("sign_out"),width="stretch"):
             _supabase_sign_out(); st.rerun()
-    st.html('<span class="muted ltr">'+escape(actor.email)+'</span>')
+    st.html('<span class="muted ltr">'+escape((actor.username+" · " if actor.username else "")+actor.email)+'</span>')
     if page=="history": render_my_history(); return
     if page=="admin": render_admin_dashboard(); return
     if page=="how": render_how_it_works(); return
