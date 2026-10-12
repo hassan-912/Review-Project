@@ -1,0 +1,12 @@
+# Direct dependencies pinned to the release's verified versions.
+streamlit==1.61.1
+google-genai==2.17.0
+pydantic==2.13.4
+pymupdf==1.28.2
+supabase==2.31.0
+tenacity==9.1.4
+fpdf2==2.8.7
+python-dotenv==1.2.3
+Pillow==12.3.0
+uharfbuzz==0.52.0
+tzdata==2026.3

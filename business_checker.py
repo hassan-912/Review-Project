@@ -179,7 +179,7 @@ def check_business_alignment(data: VisaDocumentExtraction) -> BusinessCheckResul
     # Business visa: check if business docs were provided
     # ------------------------------------------------------------------
     if not field_of_work:
-        issues.append(ValidationIssue(
+        issues.append(ValidationIssue(message_key='business.01',
             document_name="Commercial Registry / Tax Card",
             field_name="field_of_work",
             found_value=None,
@@ -193,7 +193,7 @@ def check_business_alignment(data: VisaDocumentExtraction) -> BusinessCheckResul
         ))
 
     if not invitation_topic:
-        issues.append(ValidationIssue(
+        issues.append(ValidationIssue(message_key='business.02',
             document_name="Invitation Letter / Cover Letter",
             field_name="invitation_topic",
             found_value=None,
@@ -239,7 +239,7 @@ def check_business_alignment(data: VisaDocumentExtraction) -> BusinessCheckResul
             f"Work sectors detected: {work_sectors or {'unknown'}}. "
             f"Trip sectors detected: {trip_sectors or {'unknown'}}."
         )
-        issues.append(ValidationIssue(
+        issues.append(ValidationIssue(message_key='business.03',
             document_name="Commercial Registry / Invitation Letter",
             field_name="field_of_work vs invitation_topic",
             found_value=f"Work: {field_of_work} | Trip: {invitation_topic}",

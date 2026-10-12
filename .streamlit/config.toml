@@ -1,10 +1,21 @@
 [theme]
-base            = "dark"
-primaryColor    = "#4F8EF7"
-backgroundColor = "#0D1117"
-secondaryBackgroundColor = "#161B22"
-textColor       = "#E6EDF3"
-font            = "sans serif"
+base = "light"
+primaryColor = "#0067DA"
+backgroundColor = "#F3F7FC"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0B1F3A"
+borderColor = "#D9E2EF"
+font = "sans-serif"
+baseRadius = "12px"
 
 [server]
-maxUploadSize   = 50
+headless = true
+maxUploadSize = 20
+enableXsrfProtection = true
+enableCORS = true
+
+[client]
+showErrorDetails = "none"
+
+[browser]
+gatherUsageStats = false
