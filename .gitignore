@@ -6,6 +6,8 @@ __pycache__/
 
 # Environment / secrets — NEVER commit
 .env
+.env.*
+!.env.example
 .env.local
 .env.*.local
 
