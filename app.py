@@ -480,7 +480,12 @@ def render_logs(rows,team=False):
     pages=max(1,(len(filtered)+24)//25)
     page=st.number_input(t("page"),min_value=1,max_value=pages,value=1,step=1,key="log_page")
     shown=filtered[(int(page)-1)*25:int(page)*25]
-    st.dataframe([{t(key):value for key,value in r.items()} for r in shown],hide_index=True,width="stretch")
+    displayed=[]
+    for row in shown:
+        items=list(row.items())
+        if st.session_state.lang=="ar": items.reverse()
+        displayed.append({t(key):value for key,value in items})
+    st.dataframe(displayed,hide_index=True,width="stretch")
     if team:
         buffer=StringIO(); writer=csv.writer(buffer)
         fields=["client_name","country","agent","latest_score","date"]
