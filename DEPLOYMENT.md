@@ -2,6 +2,10 @@
 
 ## Free hosting
 
+Live deployment: **https://mg-visa-review.streamlit.app/** (2026-10-12).
+Production health returned `ok`, and English and Arabic sign-in screens were verified.
+Supabase's Site URL and exact redirect allowlist now point to the production domain.
+
 Deploy `app.py` from the `codex/production-ready` branch of `hassan-912/Review-Project`
 on Streamlit Community Cloud. Select Python **3.12** in Advanced settings. Dependencies
 are pinned in `requirements.txt`; `requirements.in` records the direct dependencies.

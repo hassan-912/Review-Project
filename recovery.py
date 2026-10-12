@@ -6,10 +6,24 @@ _bridge = components.component(
     html="<span></span>",
     js="""
 export default function({setTriggerValue}) {
-  const params = new URLSearchParams(window.location.hash.slice(1));
+  // Community Cloud embeds the app in a same-origin frame. Clear the recovery
+  // fragment in both the app and its hosting window; never access other origins.
+  const windows = [window];
+  try {
+    if (window.parent !== window && window.parent.location.origin === window.location.origin) {
+      windows.push(window.parent);
+    }
+  } catch (_) { /* Cross-origin embeds retain the normal app-only callback. */ }
+  const source = windows.find(w => new URLSearchParams(w.location.hash.slice(1)).get('type') === 'recovery');
+  if (!source) return;
+  const params = new URLSearchParams(source.location.hash.slice(1));
   if (params.get('type') === 'recovery' && params.get('access_token') && params.get('refresh_token')) {
     const value = {access_token: params.get('access_token'), refresh_token: params.get('refresh_token')};
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    for (const target of windows) {
+      if (new URLSearchParams(target.location.hash.slice(1)).get('type') === 'recovery') {
+        target.history.replaceState(null, '', target.location.pathname + target.location.search);
+      }
+    }
     setTriggerValue('recovery', value);
   }
 }
