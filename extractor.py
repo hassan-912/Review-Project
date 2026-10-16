@@ -348,6 +348,9 @@ class DocumentAudit(BaseModel):
         return [] if value is None else value
 
 
+from finance_review import BankStatement, TripCost, BookingStatus
+
+
 class VisaDocumentExtraction(BaseModel):
     """
     Master extraction schema — all fields extracted across all uploaded
@@ -369,6 +372,9 @@ class VisaDocumentExtraction(BaseModel):
     evidence_locations: list[SourceField] = Field(default_factory=list)
     supporting_documents: list[SupportingDocument] = Field(default_factory=list)
     document_audits: list[DocumentAudit] = Field(default_factory=list)
+    bank_statements: list[BankStatement] = Field(default_factory=list)
+    trip_costs: list[TripCost] = Field(default_factory=list)
+    booking_statuses: list[BookingStatus] = Field(default_factory=list)
     main_schengen_destination: Optional[str] = Field(
         None, description="Country where applicant will spend the most nights"
     )
@@ -400,7 +406,7 @@ class VisaDocumentExtraction(BaseModel):
         # as an empty model so validation can flag it, without inventing any fields.
         return {} if value is None else value
 
-    @field_validator("identity_evidence","detected_documents","urgent_actions","evidence_locations","supporting_documents","document_audits",mode="before")
+    @field_validator("identity_evidence","detected_documents","urgent_actions","evidence_locations","supporting_documents","document_audits","bank_statements","trip_costs","booking_statuses",mode="before")
     @classmethod
     def absent_arrays(cls,value):
         return [] if value is None else value
@@ -474,6 +480,17 @@ Keep identity, business sectors, journey purpose, city and country fields in the
 or English so deterministic validation works identically in both languages.
 Write executive_summary, urgent_actions and raw_extraction_notes in {report_language}.
 Summarize evidence and uncertainties; do not predict consular approval or invent a verdict.
+Bank-statement category files are FINAL-PAGE BALANCE ONLY. Extract bank_statements from
+that page only: final available balance if explicitly printed, otherwise final closing
+balance labelled closing, currency, date and owner only if printed there. Return null
+when unclear; never substitute a debit, credit, turnover or opening balance. Do not
+analyse transactions or deposits, or infer account ownership from earlier pages.
+Extract trip_costs only from explicit TOTAL prices in flights, hotels and itinerary.
+Never invent fares, use per-night/per-person prices as trip totals, or duplicate a cost
+from copies. Only mark paid when payment is explicitly established. Quote amount/currency.
+Record booking_statuses for flight and hotel reservations. HELD/ON HOLD/OPTION bookings
+are acceptable reservations: say 'Booking is on hold'. Do not deduct points, infer
+cancellation from a payment deadline, or demand purchased tickets/prepaid hotels.
 Extract EVERY accommodation booking into the hotel array, one entry per booking. Use [] if absent.
 
 CONTENT CLASSIFICATION AND STRICT TRANSCRIPTION:
@@ -830,6 +847,25 @@ def _classify_content(
 
             # Document header (always a text part)
             slots.append({"text": f"\n--- Document: {label} ---"})
+
+            if category=='bank_statement' and filename.lower().endswith('.pdf'):
+                with fitz.open(stream=file_bytes,filetype='pdf') as original:
+                    number=len(original)
+                    with fitz.open() as excerpt:
+                        excerpt.insert_pdf(original,from_page=number-1,to_page=number-1)
+                        file_bytes=excerpt.tobytes()
+                slots.append({'text':f'BANK BALANCE ONLY. This is original page {number}, the FINAL page. '
+                    'Record pages_read=['+str(number)+']. Earlier pages are intentionally excluded. '
+                    'Extract only the final available/closing balance, currency, date and owner if printed. '
+                    'Do not analyse transactions, income, deposits, identity discrepancies or funding history. '
+                    'All source page references MUST use original page '+str(number)+'.'})
+                text=_extract_pdf_text(filename,file_bytes)
+                if text:
+                    slots.append({'text':text.replace('[Page 1]',f'[Original final page {number}]',1)})
+                else:
+                    slots.append(len(upload_tasks))
+                    upload_tasks.append((label,_guess_mime(filename),file_bytes))
+                continue
 
             if is_passport:
                 # Passport: ALWAYS use File API — native PDF vision OCR handles

@@ -247,13 +247,12 @@ def test_quote_punctuation_changes_do_not_hide_an_actual_field_label():
         {'visa_form':[('form.pdf',pdf('Telephone number(s)'))]})
 
 
-def test_context_kind_sets_policy_severity_and_human_document_label(complete_extraction):
+def test_context_hold_cannot_create_a_scored_finding(complete_extraction):
     from context_review import context_issues
     complete_extraction.contextual_findings=[dict(document='flight',field_name='reservation_validity',severity='MEDIUM',
         title='Payment hold needs rechecking',found='On hold',expected='Current validity',fix='Obtain a fresh reservation',
         sources=[dict(source_file='flight.pdf',page=1,text='On hold')],references=[])]
-    issue=context_issues(complete_extraction)[0]
-    assert issue.severity==Severity.HIGH and issue.document_name=='Flight Reservation'
+    assert not context_issues(complete_extraction)
 
 
 def test_flight_day_recommendations_use_final_arrival_and_return_departure(complete_extraction):
@@ -275,14 +274,14 @@ def test_absent_cover_letter_never_invents_a_sponsor(complete_extraction):
     assert any('[Actual payer]' in (e.replacement or '') for e in edits)
 
 
-def test_elapsed_flight_hold_is_unresolved_not_claimed_cancelled(complete_extraction):
+def test_elapsed_flight_hold_is_an_informational_booking_status(complete_extraction):
     from datetime import date
     from source_checks import reservation_and_title_checks
     raw=pdf('BOOKING ON HOLD\nThe fare quoted will be secured for payment within 12 hours. If payment not received reservation will be cancelled.',
             'Date of issue: 01 Oct 2026\nA fictional flight reservation')
     issues=reservation_and_title_checks(complete_extraction,{'flight':[('flight.pdf',raw)]},date(2026,10,3))
-    assert len(issues)==1 and issues[0].severity==Severity.HIGH and issues[0].field_name=='reservation_validity'
-    assert 'does not establish cancellation' in issues[0].recommended_fix
+    assert not issues
+    assert complete_extraction.booking_statuses[0].status=='held'
     assert not reservation_and_title_checks(complete_extraction,{'flight':[('flight.pdf',raw)]},date(2026,10,1))
 
 

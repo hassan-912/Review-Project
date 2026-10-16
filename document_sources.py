@@ -10,7 +10,8 @@ def unique_uploads(uploaded):
     """Read identical bytes once, including combined files uploaded to two slots."""
     result, seen = {}, set()
     names = Counter(name for group in uploaded.values() for name, _ in group)
-    for category, group in uploaded.items():
+    # Stable precedence makes drag/display order unable to change document meaning.
+    for category, group in sorted(uploaded.items(),key=lambda item:(item[0]!='bank_statement',item[0])):
         for name, raw in group:
             digest = sha256(raw).hexdigest()
             if digest in seen:
@@ -30,6 +31,8 @@ def source_manifest(uploaded):
                 with pymupdf.open(stream=raw, filetype='pdf') as pdf:
                     pages = len(pdf)
             result[name] = {"category_hint": category, "pages": pages}
+            if category=='bank_statement':
+                result[name]['review_pages']=[pages]
     return result
 
 

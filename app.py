@@ -19,7 +19,7 @@ import accounts
 from accounts import AccountError
 from settings import setting
 from extractor import AVAILABLE_MODELS
-from uploads import CATEGORIES, files_hash, validate_uploads
+from uploads import CATEGORIES, files_hash, validate_uploads, category_order, upload_thumbnail
 from theme import inject_theme
 from pdf_report import build_pdf_report, score_badge
 from review_pipeline import review_documents
@@ -28,6 +28,7 @@ from recovery import recovery_tokens
 from writing_review import writing_recommendations
 from evidence import render_source
 from model_routing import ModelUnavailable
+from finance_review import assess_budget
 
 logger = logging.getLogger(__name__)
 
@@ -270,22 +271,29 @@ def render_upload_ui():
     st.caption(t("upload_hint"))
     st.caption(t("combined_hint"))
     uploaded={}
-    icons=("badge","description","article","hotel","flight","health_and_safety","work","map","folder")
-    for offset in range(0, len(CATEGORIES),3):
+    icons=dict(zip(CATEGORIES,("badge","description","article","hotel","flight","health_and_safety","work","map","account_balance","folder")))
+    order=current_category_order()
+    for offset in range(0, len(order),3):
         columns=st.columns(3)
-        for index, category in enumerate(CATEGORIES[offset:offset+3],offset):
+        for index, category in enumerate(order[offset:offset+3],offset):
             widget_key=f"upload_{st.session_state.upload_generation}_{category}"
             previous=st.session_state.get(widget_key)
             with columns[index % 3], st.container(border=True, key=("slot_filled_" if previous else "slot_empty_")+category):
-                st.markdown(f':material/{icons[index]}: **{t("doc_"+category)}**')
+                st.markdown(f':material/{icons[category]}: **{t("doc_"+category)}**')
+                if category=='bank_statement':st.caption(t('bank_scope'))
                 files=st.file_uploader(t("doc_"+category),type=["pdf","jpg","jpeg","png","webp"],
                                        accept_multiple_files=True,key=widget_key,max_upload_size=20,label_visibility="collapsed")
                 if files:
                     uploaded[category]=[(f.name,f.getvalue()) for f in files]
                     st.html('<span class="pill added">'+escape(t("files_added",count=len(files)))+'</span>')
+                    render_upload_thumbnails(uploaded[category],category)
                 else:
                     st.caption(t("choose_files"))
     st.caption(t("privacy"))
+    import hashlib
+    active_previews={(category,hashlib.sha256(raw).hexdigest()) for category,group in uploaded.items() for _,raw in group}
+    if 'upload_thumbnails' in st.session_state:
+        st.session_state.upload_thumbnails={k:v for k,v in st.session_state.upload_thumbnails.items() if k in active_previews}
     st.caption(t("log_notice"))
     missing=[category for category in CATEGORIES if category not in uploaded]
     if missing:
@@ -293,6 +301,37 @@ def render_upload_ui():
             st.write(", ".join(t("doc_"+category) for category in missing))
             st.caption(t("missing_hint"))
     return uploaded,"auto",client_name,force
+
+
+def current_category_order():
+    cached=st.session_state.get('category_order_cache')
+    if cached and time.monotonic()-cached[0]<60:
+        return category_order(cached[1])
+    try:
+        order=accounts.upload_category_order(get_auth_client(),st.session_state.supabase_session)
+    except Exception:
+        order=category_order()
+    st.session_state.category_order_cache=(time.monotonic(),order)
+    return order
+
+
+def render_upload_thumbnails(files,category):
+    import hashlib
+    cache=st.session_state.setdefault('upload_thumbnails',{})
+    for name,raw in files:
+        digest=hashlib.sha256(raw).hexdigest();key=(category,digest)
+        if key not in cache:
+            if len(cache)>=30:cache.pop(next(iter(cache)))
+            try:cache[key]=upload_thumbnail(name,raw,category)
+            except ValueError:cache[key]=None
+        if cache[key]:
+            image,page,pages=cache[key]
+            preview,label=st.columns([1,2],vertical_alignment='center')
+            preview.image(image,width='stretch')
+            label.text(name)
+            label.caption(t('upload_preview',page=page,pages=pages,size=f'{len(raw)/1024:.0f}'))
+        else:
+            st.caption(name+' · '+t('preview_unavailable'))
 
 
 def run_review(uploaded_files,model_id,client_name,force_refresh=False):
@@ -469,6 +508,10 @@ def render_fix_checklist(issues,result=None):
 
 def render_report(result):
     data,issues,score=result["extraction"],result["issues"],result["score"]
+    for booking in data.booking_statuses:
+        st.info(t('doc_'+booking.category)+': '+t('booking_'+booking.status))
+    if result.get('budget') is not None:
+        render_bank_budget(result)
     findings = [issue for issue in issues if issue.affects_score]
     limitations = [issue for issue in issues if not issue.affects_score]
     left,right=st.columns([1,1.6],gap="large")
@@ -572,7 +615,7 @@ def render_report(result):
     try:
         pdfs=result.setdefault("pdfs",{})
         if st.session_state.lang not in pdfs:
-            pdfs[st.session_state.lang]=build_pdf_report(data,issues,score,result["biz_result"],st.session_state.lang,result["client_name"],writing)
+            pdfs[st.session_state.lang]=build_pdf_report(data,issues,score,result["biz_result"],st.session_state.lang,result["client_name"],writing,budget=result.get('budget'))
         pdf=pdfs[st.session_state.lang]
         st.download_button(t("download_pdf"),pdf,file_name="MG-review.pdf",mime="application/pdf",icon=":material/download:")
     except Exception:
@@ -690,12 +733,68 @@ def render_admin_dashboard():
                             except AccountError as exc:
                                 st.error(t(str(exc)))
     if st.session_state.actor.role=="super_admin":
+        render_category_order_editor(client,session)
         render_model_dashboard(client,session)
     st.subheader(t("review_log"))
     render_logs(rows,team=True)
     with st.expander(t("attempts")):
         st.caption(t("attempts_hint"))
         render_logs(attempts,team=True,key_prefix="attempts")
+
+
+def render_category_order_editor(client,session):
+    st.subheader(t('category_order'))
+    st.caption(t('category_order_hint'))
+    order=st.session_state.setdefault('category_order_draft',list(current_category_order()))
+    order=category_order(order)
+    selected=st.selectbox(t('category_to_move'),order,format_func=lambda c:t('doc_'+c),key='category_to_move')
+    index=order.index(selected)
+    up,down,save=st.columns(3)
+    for column,delta,label in ((up,-1,'move_up'),(down,1,'move_down')):
+        if column.button(t(label),disabled=not 0<=index+delta<len(order),width='stretch'):
+            order[index],order[index+delta]=order[index+delta],order[index]
+            st.session_state.category_order_draft=order
+            st.rerun()
+    if save.button(t('save_order'),type='primary',width='stretch'):
+        try:
+            accounts.save_upload_category_order(client,session,order)
+            st.session_state.category_order_cache=(time.monotonic(),order)
+            st.success(t('order_saved'))
+        except Exception:st.error(t('access_update_failed'))
+    st.caption(' → '.join(f'{i+1}. {t("doc_"+category)}' for i,category in enumerate(order)))
+
+
+def render_bank_budget(result):
+    with st.container(border=True):
+        st.subheader(t('bank_budget'))
+        st.caption(t('bank_scope'))
+        controls,note=st.columns([1,2],vertical_alignment='center')
+        allowance=controls.number_input(t('daily_allowance'),min_value=0.0,max_value=2000.0,
+            value=75.0,step=5.0,key='daily_budget_'+result.get('hash','report'),help=t('allowance_hint'))
+        original=result['budget']
+        # Reuse the exchange snapshot used for this review; no extra model call.
+        budget=assess_budget(result['extraction'],allowance,rates=result.get('exchange_snapshot'))
+        if budget!=original:result.pop('pdfs',None)
+        result['budget']=budget
+        note.caption(t('budget_scope'))
+        balances,trip=st.columns(2,gap='large')
+        if not budget['balances']:balances.warning(t('balance_unreadable'))
+        for bank in budget['balances']:
+            value=f"{bank['balance']:,.2f} {bank['currency'] or ''}"
+            balances.metric(t('balance_'+bank['balance_type']),value)
+            if bank['eur'] is not None:balances.caption(f"≈ EUR {bank['eur']:,.2f}")
+            if bank['statement_date']:balances.caption(t('statement_date')+': '+bank['statement_date'])
+            if bank['holder_name']:balances.caption(bank['holder_name'])
+            balances.write(t('budget_'+bank['status']))
+        trip.metric(t('budget_total'),f"EUR {budget['known_budget_eur']:,.2f}")
+        for cost in budget['costs']:
+            trip.text(t('doc_'+cost['category'])+f": {cost['amount']:,.2f} {cost['currency']}"+(' · '+t('paid_excluded') if cost['paid'] else ''))
+        trip.caption(t('allowance_total',days=budget['days'] or '?',amount=f"{budget['allowance_eur'] or 0:,.2f}"))
+        if budget['missing']:
+            trip.warning(t('budget_missing')+': '+', '.join(t('budget_missing_'+key) for key in budget['missing']))
+        if budget.get('rate_date'):
+            st.caption(t('budget_rate_date',date=budget['rate_date']))
+            st.markdown('[Rates By Exchange Rate API](https://www.exchangerate-api.com)')
 
 
 def render_model_dashboard(client,session):

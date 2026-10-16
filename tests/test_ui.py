@@ -9,9 +9,45 @@ from i18n import t
 APP_PATH = Path(__file__).resolve().parents[1] / "app.py"
 
 
+def test_category_reorder_and_save_keeps_stable_ids(monkeypatch):
+    from unittest.mock import Mock
+    from uploads import CATEGORIES
+    save=Mock();monkeypatch.setattr(accounts,'save_upload_category_order',save)
+    app=AppTest.from_string('''
+import app
+app._init_session_state()
+app.render_category_order_editor(object(),object())
+''',default_timeout=30).run()
+    app.selectbox(key='category_to_move').select('bank_statement').run()
+    next(b for b in app.button if b.label==t('move_up','en')).click().run()
+    next(b for b in app.button if b.label==t('save_order','en')).click().run()
+    assert not app.exception
+    saved=save.call_args.args[2]
+    assert saved.index('bank_statement')==CATEGORIES.index('bank_statement')-1
+    assert set(saved)==set(CATEGORIES)
+
+
+def test_bank_upload_thumbnail_is_visible():
+    import pymupdf
+    with pymupdf.open() as doc:
+        doc.new_page().insert_text((50,60),'First page')
+        doc.new_page().insert_text((50,60),'Final available balance EUR 5000')
+        raw=doc.tobytes().hex()
+    app=AppTest.from_string(f'''
+import app
+app._init_session_state()
+app.render_upload_thumbnails([('bank.pdf',bytes.fromhex('{raw}'))],'bank_statement')
+''',default_timeout=30).run()
+    assert not app.exception
+    assert len(app.get('image'))==1
+    assert any('Page 2 of 2' in item.value for item in app.caption)
+
+
 @pytest.fixture(autouse=True)
 def no_browser_recovery_token(monkeypatch):
     # AppTest has no browser JS and replaces its component registry between app instances.
+    from uploads import CATEGORIES
+    monkeypatch.setattr(accounts,"upload_category_order",lambda *a:list(CATEGORIES))
     import recovery
     monkeypatch.setattr(recovery,"recovery_tokens",lambda:None)
 
@@ -45,7 +81,7 @@ def test_approved_pages_are_bilingual(monkeypatch,lang,page):
     assert not app.exception
     assert app.title[0].value==t('review_title' if page=='review' else page,lang)
     if page=='review':
-        assert len(app.get('file_uploader'))==9
+        assert len(app.get('file_uploader'))==10
 
 
 def test_failed_legacy_restore_clears_url_and_explains(monkeypatch):

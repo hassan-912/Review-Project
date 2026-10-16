@@ -213,3 +213,18 @@ def configure_model(client,session,model,enabled,priority,rpm,tpm,rpd):
 def set_reviews_enabled(client,session,enabled):
     actor=verified_actor(client,session,require_super=True)
     admin_client().rpc("set_reviews_enabled",{"p_actor":actor.user_id,"p_enabled":bool(enabled)}).execute()
+
+
+def upload_category_order(client,session):
+    from uploads import category_order
+    verified_actor(client,session)
+    rows=admin_client().table('app_controls').select('upload_category_order').eq('id',True).limit(1).execute().data
+    return category_order(rows[0].get('upload_category_order') if rows else None)
+
+
+def save_upload_category_order(client,session,order):
+    from uploads import CATEGORIES
+    actor=verified_actor(client,session,require_super=True)
+    if len(order)!=len(CATEGORIES) or set(order)!=set(CATEGORIES):
+        raise AccountError('access_update_failed')
+    admin_client().rpc('set_upload_category_order',{'p_actor':actor.user_id,'p_order':list(order)}).execute()

@@ -10,9 +10,30 @@ from io import BytesIO
 
 CATEGORIES = (
     "passport", "visa_form", "cover_letter", "hotel", "flight",
-    "insurance", "employment", "travel_plan", "supporting",
+    "insurance", "employment", "travel_plan", "bank_statement", "supporting",
 )
-SCHEMA_VERSION = "review-v5-context-audit"
+SCHEMA_VERSION = "review-v6-bank-budget"
+
+
+def category_order(order=None):
+    """Keep stable category IDs even when the display order is customized."""
+    known=list(dict.fromkeys(x for x in (order or []) if x in CATEGORIES))
+    return known+[x for x in CATEGORIES if x not in known]
+
+
+def upload_thumbnail(name,data,category='supporting'):
+    """Bounded preview generated in memory; bank previews show only the final page."""
+    validate_uploads({category:[(name,data)]})
+    if name.lower().endswith('.pdf'):
+        with fitz.open(stream=data,filetype='pdf') as doc:
+            index=len(doc)-1 if category=='bank_statement' else 0
+            page=doc[index]
+            scale=min(1,420/max(page.rect.width,page.rect.height))
+            return page.get_pixmap(matrix=fitz.Matrix(scale,scale),alpha=False).tobytes('png'),index+1,len(doc)
+    with Image.open(BytesIO(data)) as image:
+        image.thumbnail((420,420))
+        output=BytesIO();image.convert('RGB').save(output,format='PNG')
+        return output.getvalue(),1,1
 
 
 def files_hash(files: dict, model: str, lang: str = "en") -> str:

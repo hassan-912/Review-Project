@@ -9,6 +9,7 @@ from evidence import attach_evidence
 from context_review import context_issues
 from document_sources import unique_uploads
 from source_checks import printed_form_checks, translation_date_checks, reservation_and_title_checks
+from finance_review import grounded_financial_data, assess_budget, exchange_rates
 
 
 def review_documents(api_key, uploaded_files, model_id="auto", lang="en", progress=None, router=None):
@@ -18,6 +19,7 @@ def review_documents(api_key, uploaded_files, model_id="auto", lang="en", progre
             progress(number)
     step(1)
     extraction = extract_documents(api_key, uploaded_files, model_id=model_id, lang=lang,router=router)
+    grounded_financial_data(extraction,uploaded_files)
     source_issues = (printed_form_checks(extraction, uploaded_files) + translation_date_checks(uploaded_files)
                      + reservation_and_title_checks(extraction, uploaded_files))
     step(2)
@@ -52,10 +54,12 @@ def review_documents(api_key, uploaded_files, model_id="auto", lang="en", progre
     score = calculate_score(issues, _cover_letter_is_complete(extraction), _leave_is_confirmed(extraction))
     order = {"CRITICAL":0,"HIGH":1,"MEDIUM":2,"LOW":3}
     issues.sort(key=lambda x: (not x.affects_score, order[x.severity.value]))
-    texts = {name:text for group in uploaded_files.values() for name,raw in group
+    texts = {name:text for category,group in uploaded_files.items() if category!='bank_statement' for name,raw in group
              if (text := _extract_pdf_text(name,raw)) is not None}
     writing = writing_recommendations(extraction,lang,texts)
+    rates=exchange_rates() if 'bank_statement' in uploaded_files else None
+    budget=assess_budget(extraction,rates=rates) if 'bank_statement' in uploaded_files else None
     step(5)
     return {"extraction":extraction, "issues":issues, "biz_result":business, "score":score,
             "lang":lang, "model_used":extraction.model_used or model_id, "writing":writing,
-            "quality":quality,"source_files":uploaded_files}
+            "quality":quality,"source_files":uploaded_files,"budget":budget,"exchange_snapshot":rates}

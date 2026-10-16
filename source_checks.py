@@ -4,7 +4,6 @@ These supplement contextual AI review with observations from the actual PDF cell
 No applicant-specific names, dates or outcomes are encoded here.
 """
 import re
-from datetime import date, datetime, timedelta
 import pymupdf
 from validator import ValidationIssue, Severity, _names_match
 
@@ -14,6 +13,7 @@ def printed_form_checks(data, uploaded):
     audited = {a.source_file for a in data.document_audits if 'visa_form' in a.document_types}
     for category, group in uploaded.items():
         for name, raw in group:
+            if category=='bank_statement':continue
             if (category != 'visa_form' and name not in audited) or not name.lower().endswith('.pdf'):
                 continue
             missing, evidence = [], []
@@ -63,9 +63,9 @@ def translation_date_checks(uploaded):
     issues=[]
     months={name:index for index,name in enumerate(('january','february','march','april','may','june','july','august','september','october','november','december'),1)}
     pattern=re.compile(r'(?:date\s+of\s+birth|birth\s+date)\s*:?\s*(\d{1,2})/(\d{1,2})/(\d{4})\s+in\s+words\s*:\s*([^\n]+)',re.I)
-    for group in uploaded.values():
+    for category,group in uploaded.items():
         for name,raw in group:
-            if not name.lower().endswith('.pdf'):continue
+            if category=='bank_statement' or not name.lower().endswith('.pdf'):continue
             with pymupdf.open(stream=raw,filetype='pdf') as doc:
                 for number,page in enumerate(doc,1):
                     for match in pattern.finditer(page.get_text(sort=True)):
@@ -83,31 +83,32 @@ def translation_date_checks(uploaded):
 
 def reservation_and_title_checks(data, uploaded, review_date=None):
     """Read explicit hold conditions and applicant honorifics; no live-status claims."""
-    issues=[];today=review_date or date.today()
-    audits={audit.source_file:audit.document_types for audit in data.document_audits}
+    issues=[]
     for category,group in uploaded.items():
         for name,raw in group:
-            if not name.lower().endswith('.pdf'):continue
+            if category=='bank_statement' or not name.lower().endswith('.pdf'):continue
             with pymupdf.open(stream=raw,filetype='pdf') as doc:
                 pages=[page.get_text(sort=True) for page in doc]
-            text='\n'.join(pages)
-            if category=='flight' or 'flight' in audits.get(name,[]):
-                hours=re.search(r'payment\s+within\s+(\d+)\s+hours',text,re.I)
-                issued=re.search(r'Date\s+of\s+issue\s*:\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})',text,re.I)
-                ticket=re.search(r'(?:e-?ticket|ticket)\s*(?:number|no\.?)\s*:?\s*\d{13}\b',text,re.I)
-                if hours and issued and not ticket and re.search(r'ON\s+HOLD',text,re.I):
-                    try:day=datetime.strptime(issued[1],'%d %b %Y').date()
-                    except ValueError:day=None
-                    if day and today>day+timedelta(days=(int(hours[1])+23)//24):
-                        page_number=next(i for i,p in enumerate(pages,1) if re.search(r'payment\s+within',p,re.I))
-                        quote=re.search(r'The fare quoted.*?cancelled\s*\.',pages[page_number-1],re.I|re.S)
-                        quote=quote.group() if quote else hours.group()
-                        issues.append(ValidationIssue(document_name='Flight Reservation',field_name='reservation_validity',
-                            found_value=f'Payment hold: {hours[1]} hours; issued {day}',
-                            expected_value='Evidence of a currently valid reservation or subsequent renewal/issuance',severity=Severity.HIGH,
-                            message_key='context.reservation_validity',title_en='Payment-hold validity needs confirmation',
-                            recommended_fix='The payment window printed on this copy has elapsed. Obtain current airline confirmation or a fresh valid reservation. This copy alone does not establish cancellation or require purchasing a ticket.',
-                            evidence=[{'source_file':name,'page':page_number,'text':quote}]))
+            from finance_review import BookingStatus
+            ticket_pattern=r'(?:e-?ticket|ticket)\s*(?:number|no\.?)\s*:?\s*\d{13}\b'
+            booking_pages=sorted(enumerate(pages,1),key=lambda row:not bool(re.search(ticket_pattern,row[1],re.I)))
+            for number,page in booking_pages:
+                issued=re.search(ticket_pattern,page,re.I)
+                hold=re.search(r'\b(?:ON\s+HOLD|HELD|BOOKING\s+(?:IS\s+)?ON\s+HOLD)\b',page,re.I)
+                if hold and re.search(r'(?:not|no longer)\s*$',page[max(0,hold.start()-20):hold.start()],re.I):
+                    continue
+                match=issued or hold
+                if match and category in ('flight','hotel'):
+                    status='confirmed' if issued else 'held'
+                    existing=[row for row in data.booking_statuses if row.source_file==name]
+                    if not existing:
+                        data.booking_statuses.append(BookingStatus(category=category,source_file=name,
+                            page=number,status=status,quote=match.group()))
+                    else:
+                        for row in existing:
+                            if row.status!='cancelled':
+                                row.status=status;row.quote=match.group();row.page=number
+                    break
             gender=(data.passport.gender or '').casefold()
             wrong=r'\b(?:Ms|Mrs)\.' if gender in ('m','male','ذكر') else r'\bMr\.' if gender in ('f','female','أنثى') else None
             if wrong:

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 from google.genai import types
 from model_routing import generate_automatically, ModelUnavailable
 from document_sources import source_manifest, source_is_grounded
+from finance_review import BankStatement, TripCost, BookingStatus
 from extractor import (DocumentAudit, WritingRecommendation, CoverLetterInfo, NarrativeSection,
                        SupportingDocument, VisaApplicationInfo, NationalIDInfo, SourceField)
 
@@ -54,6 +55,9 @@ class ContextDocumentAudit(DocumentAudit):
 
 
 class ContextReview(BaseModel):
+    bank_statements: list[BankStatement] = Field(default_factory=list)
+    trip_costs: list[TripCost] = Field(default_factory=list)
+    booking_statuses: list[BookingStatus] = Field(default_factory=list)
     checks: list[ReviewedCheck]
     document_audits: list[ContextDocumentAudit]
     applicant_status: Literal["student", "employee", "employed_student", "self_employed", "retired", "other", "unknown"]
@@ -79,7 +83,8 @@ def parse_context(raw, manifest):
     if len(names) != len(set(names)) or set(names) != set(manifest):
         raise ValueError("Context review omitted or renamed a source file")
     for audit in review.document_audits:
-        expected = set(range(1, manifest[audit.source_file]['pages'] + 1))
+        entry=manifest[audit.source_file]
+        expected = set(entry.get('review_pages',range(1,entry['pages']+1)))
         if set(audit.pages_read) - expected:
             raise ValueError("Invalid source page")
         if audit.readability == 'readable' and set(audit.pages_read) != expected:
@@ -88,6 +93,11 @@ def parse_context(raw, manifest):
         raise ValueError("Unknown cover-letter source")
     if review.cover_letter_present and not review.cover_letter_sources:
         raise ValueError("A cover letter needs an actual supplied source")
+    bank_names={name for name,entry in manifest.items() if entry.get('category_hint')=='bank_statement'}
+    if {bank.source_file for bank in review.bank_statements} != bank_names:
+        raise ValueError('Every bank statement requires a final-page balance assessment, even when unreadable')
+    if any(bank.page!=manifest[bank.source_file]['pages'] for bank in review.bank_statements):
+        raise ValueError('Bank balances must refer to the original final page')
     return review
 
 
@@ -128,12 +138,19 @@ CONTEXT RULES:
   spouse/EU-relative fields for mandatory applicant fields. Report missing applicant fields as ONE
   MEDIUM application_completeness finding, quoted from the relevant labels/pages.
 - Read reservation conditions, not just 'confirmed' flight segments. A payment hold with elapsed
-  validity is unresolved unless a supplied later document establishes renewal/payment/issuance.
-  Use review date above. Recommend a CURRENT VALID RESERVATION, not compulsory purchase of tickets.
-- Read bank statements by owner, period, balance and transactions. Explain substantial recent
-  deposits as a funding-clarification recommendation; do not allege fraud or assume a balance is
-  insufficient. A parent's account is not automatically applicant money; a withdrawal authorization
-  is not an undertaking to sponsor. Self-funding can be supported by the applicant's OWN account.
+  payment terms remains a HELD booking status, not proof of cancellation. Record booking_statuses
+  for flight AND hotel with exact quotes. Say 'Booking is on hold'. Do not issue reservation_validity
+  findings, deduct points for a hold, or demand ticket purchase/hotel prepayment.
+- Bank-statement category files contain ONLY the FINAL original page, identified by the header.
+  Earlier pages are intentionally out of scope: pages_read contains only that original final page.
+  Return one bank_statements item for each bank-category file, even if balance/currency is null.
+  Extract only final AVAILABLE balance, or CLOSING balance when available is not explicitly printed;
+  preserve the label, amount, currency and date. Owner is unknown if not printed on that page.
+  Never select turnover, credits, debits or opening balance, read earlier transactions, investigate
+  deposits or make income/source-of-funds findings from this category. Do not infer sponsorship.
+  Independently return trip_costs from explicitly quoted TOTAL hotel/flight/itinerary prices;
+  use each booking once, never mistake per-person/night prices for totals, and leave unknown prices
+  absent. Mark paid only when explicit payment is established. Affordability is calculated downstream.
 - Compare translations to originals, numeric dates to written dates, titles and subject roles.
   Check EACH numeric birth date against its accompanying spelled-out month; do not stop
   after finding an honorific typo. Inspect family-register parent details in their own roles.
@@ -154,16 +171,16 @@ CONTEXT RULES:
 
 Findings require verbatim quotes on the precise original pages, with references to the conflicting
 source when relevant. Do NOT reissue generic name/passport/date arithmetic findings already handled
-by deterministic validation. DO report destination_country, reservation_validity,
+by deterministic validation. DO report destination_country,
 application_completeness and specific translation errors when actually evidenced. No finding for
 a check marked clear. Missing cover-letter findings are generated downstream; do not duplicate them.
 Context findings are document errors only; unavailable model fields or missing page audits are
 review limitations, never errors in the applicant's documents. Do not invent faults to fill a list.
-Use the exact canonical field_name enums in the schema. Destination mismatch and unresolved
-reservation validity are HIGH; group applicant form blanks into ONE MEDIUM finding; supporting
-translation DOB/honorific errors are LOW. State expired payment terms as unresolved current
-validity; do not claim certain cancellation without evidence. Include all source-specific
-recommendations, especially explaining major recent deposits and realistic flight-day timing.
+Use the exact canonical field_name enums in the schema. Destination mismatch and evidenced
+explicit cancellation are HIGH; group applicant form blanks into ONE MEDIUM finding; supporting
+translation DOB/honorific errors are LOW. A booking hold is informational even when payment
+terms have elapsed; never infer cancellation. Include realistic flight-day recommendations.
+Do not analyse deposits or recommend source-of-funds investigations for bank-category files.
 Write findings, summary and recommendations in {language}. Recommendations must give concrete
 next steps; any replace/remove must quote its own section exactly with source file and page.
 Do not invent an applicant intent, sponsorship, salary, assets or a probability of visa approval.
@@ -186,6 +203,9 @@ Return ONLY JSON matching this schema; all top-level keys are required:
     data.context_checks=[check.model_dump() for check in review.checks]
     data.model_used=' + '.join(dict.fromkeys(model for model in [data.model_used,*used_models] if model)) or data.model_used
     data.document_audits = review.document_audits
+    data.bank_statements=review.bank_statements
+    data.trip_costs=review.trip_costs
+    data.booking_statuses=review.booking_statuses
     data.visa_form = review.visa_form
     data.national_id = review.national_id
     for field in review.verified_fields:
@@ -215,6 +235,8 @@ Return ONLY JSON matching this schema; all top-level keys are required:
     data.travel_plan.recommendations += review.travel_plan_recommendations
     data.executive_summary = review.executive_summary
     for finding in review.findings:
+        if finding.field_name=='reservation_validity':
+            continue  # A held booking is informational under the review policy.
         if all(source_is_grounded(source.model_dump(), uploaded) for source in [*finding.sources, *finding.references]):
             data.contextual_findings.append(finding.model_dump())
         else:
@@ -227,6 +249,7 @@ def context_issues(data):
     issues = []
     for row in data.contextual_findings:
         finding = ContextFinding.model_validate(row)
+        if finding.field_name=='reservation_validity':continue
         from evidence import _category
         labels={'visa_form':'Visa Application Form','flight':'Flight Reservation','hotel':'Hotel Reservation',
                 'supporting':'Supporting Documents','insurance':'Travel Insurance','travel_plan':'Travel Itinerary'}

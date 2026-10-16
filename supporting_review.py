@@ -109,15 +109,16 @@ def extraction_quality(data,uploaded_files):
             if name.lower().endswith('.pdf'):
                 with pymupdf.open(stream=raw,filetype='pdf') as pdf: pages=len(pdf)
             audit=audits.get(name) if names[name]==1 else None
-            reported={p for p in audit.pages_read if 1<=p<=pages} if audit else set()
-            total+=pages;read+=len(reported)
+            expected={pages} if category=='bank_statement' else set(range(1,pages+1))
+            reported=set(audit.pages_read)&expected if audit else set()
+            total+=len(expected);read+=len(reported)
             # Legibility/coverage is separate from notes about problems in readable text.
-            unresolved=names[name]!=1 or not audit or audit.readability!='readable' or len(reported)!=pages
-            files.append({"file":name,"pages":pages,"pages_read":len(reported),"readability":audit.readability if audit else 'unreviewed',
+            unresolved=names[name]!=1 or not audit or audit.readability!='readable' or reported!=expected
+            files.append({"file":name,"pages":len(expected),"original_pages":pages,"scope":"final_page" if category=='bank_statement' else 'all_pages',"pages_read":len(reported),"readability":audit.readability if audit else 'unreviewed',
                           "uncertainties":audit.uncertainties if audit else ["No page audit returned"]})
             if unresolved:
                 issues.append(ValidationIssue(document_name=f"Supporting Documents ({name})" if category=='supporting' else f"Document ({name})",
-                    field_name="document_readability",found_value=f"{len(reported)} / {pages}",expected_value="Every page read and legible",
+                    field_name="document_readability",found_value=f"{len(reported)} / {len(expected)}",expected_value="Every in-scope page read and legible",
                     severity=Severity.HIGH,message_key="evidence.incomplete",affects_score=False,
                     title_en="Source review is incomplete",
                     recommended_fix="The automated review did not account for every source page. Rerun or inspect the original before accepting this result. This is a review limitation, not a confirmed document error."))

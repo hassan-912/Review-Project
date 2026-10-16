@@ -1,5 +1,38 @@
 # MG Visa File Review — production release
 
+## Bank balance and upload workspace - 2026-10-16
+
+Flight and hotel holds are informational booking statuses, without a score deduction
+or a ticket/prepayment demand. A clearly issued e-ticket takes precedence over hold text.
+Downloaded reports omit document source filenames/pages; the interactive evidence view
+remains available in the app.
+
+The bank-statement category sends only the final original page to both model passes,
+including for scanned PDFs. Earlier pages are neither sent nor analysed. Page-coverage
+counts use this explicit scope. The final available or closing balance, its printed
+currency/date and any final-page holder name are source-grounded before use.
+
+Budget comparisons are non-scoring planning aids. They use explicit remaining booking
+prices and an editable EUR 75/day starting allowance for food, local transport and activities;
+this is not a consular minimum. Paid costs require explicit evidence. Missing prices,
+unknown ownership and unavailable conversions prevent a complete affordability conclusion.
+Statements are assessed separately, not summed. Public indicative EUR exchange rates are
+cached daily from the free ExchangeRate-API endpoint, dated and attributed in the app;
+no applicant data is sent to that endpoint. No paid inference provider is added.
+
+Upload cards show bounded, session-only PDF/image thumbnails, with final-page thumbnails
+for bank statements. Category IDs and file hashes stay stable when the super admin changes
+the team's shared display order. Apply `supabase/upload_categories.sql` before deploying:
+the settings table stays server-only and the save RPC rechecks the approved super-admin
+role, validates the complete category list and records the setting change.
+
+Verification: 204 offline tests pass. A tracked live review of fictional documents
+read the final bank page only, recovered the correct balance/currency, extracted both
+booking totals and reported both holds without deductions. Both PDF languages were
+rendered and checked with no source filenames/page references in the export. Database
+authorization/payload/grant assertions passed in a rolled-back transaction. Existing
+server-only RLS tables intentionally have no client policies; no new public access was added.
+
 ## Context review correction — 2026-10-16
 
 Reviews now use an extraction pass followed by an independent contextual read of the
@@ -15,8 +48,8 @@ Supporting claims preserve the subject's role and first-name-only register colum
 Application destination is compared directly with the booked main destination; country
 language/code aliases and equal-night ties are handled without selecting an arbitrary winner.
 
-Readable PDF form cells supply blank contact/identity findings. Explicit payment-hold
-conditions and numeric-versus-written translation dates are checked against source text.
+Readable PDF form cells supply blank contact/identity findings. Booking hold statuses
+and numeric-versus-written translation dates are checked against source text.
 Contextual findings require traceable quotes; actual source lines can repair an imprecise
 model quotation only when the asserted literal value is located unambiguously. Missing page
 audits and unresolved evidence are review limitations, not deductions from the applicant's
