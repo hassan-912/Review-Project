@@ -32,7 +32,10 @@ def writing_recommendations(data, lang="en", source_texts=None):
             raw=(source_texts or {}).get(name)
             chunk=_section_text(raw,key) if raw is not None else None
             sources[name]=chunk if chunk is not None else section.source_text or ''
-        for edit in section.recommendations:
+        # With no actual letter, unconstrained generated prose can fabricate a sponsor,
+        # funding arrangement or return obligation. Build factual templates below instead.
+        suggestions = [] if key=='cover_letter' and not section.present else section.recommendations
+        for edit in suggestions:
             if edit.source_file and edit.source_file not in section.source_files:
                 continue
             if edit.action in ("replace","remove"):
@@ -44,6 +47,10 @@ def writing_recommendations(data, lang="en", source_texts=None):
                 if source_texts is not None and edit.source_file in source_texts:
                     if quote not in _text(source_texts[edit.source_file]):
                         continue
+            if edit.action=='verify' and any(word in edit.reason.casefold() for word in
+                    ('holiday','opening hours','عطلة','عطل','ساعات العمل','مواعيد العمل')):
+                edit=edit.model_copy(update={'reason':t('write_calendar_verify',lang),
+                                            'replacement':t('write_calendar_action',lang)})
             edits.append(edit)
         # Catch literal unfinished template markers even if the model overlooks them.
         # For combined text PDFs the marker must belong to this heading-delimited section.
@@ -61,7 +68,16 @@ def writing_recommendations(data, lang="en", source_texts=None):
             for field,advice in (("purpose_of_visit","write_purpose"),("funding_source","write_funding"),
                                  ("ties_to_home_country","write_ties"),("attached_documents_listed","write_attachments")):
                 if not getattr(data.cover_letter,field):
-                    edits.append(WritingRecommendation(action="add",reason=t(advice,lang)))
+                    if field=='ties_to_home_country' and data.employment.evidence_type=='education':
+                        advice='write_student_ties'
+                    replacement=None
+                    if not section.present:
+                        if field=='purpose_of_visit':
+                            replacement=t('write_purpose_grounded',lang,country=data.main_schengen_destination or '[country]',
+                                start=data.visa_form.intended_arrival or '[arrival]',end=data.visa_form.intended_departure or '[departure]')
+                        elif field=='funding_source':replacement=t('write_funding_placeholder',lang)
+                        elif field=='ties_to_home_country':replacement=t('write_ties_placeholder',lang)
+                    edits.append(WritingRecommendation(action="add",reason=t(advice,lang),replacement=replacement))
         elif not section.present:
             edits.append(WritingRecommendation(action="add",reason=t("write_itinerary",lang)))
         else:
@@ -86,6 +102,11 @@ def writing_recommendations(data, lang="en", source_texts=None):
             if section.start_date and start and _parse_date(section.start_date)!=start or section.end_date and end and _parse_date(section.end_date)!=end:
                 edits.append(WritingRecommendation(action="verify",reason=t("write_plan_dates",lang)))
             if start and end and 0<=(end-start).days<=366:
+                for day,time,kind in [(start,data.flight.arrival_time,'arrival'),(end,data.flight.return_departure_time,'departure')]:
+                    if time and not any(edit.day==str(day) for edit in edits):
+                        edits.append(WritingRecommendation(action='verify',day=str(day),
+                            reason=t('write_flight_day_'+kind,lang,time=time),
+                            replacement=t('write_flight_day_'+kind+'_fix',lang,time=time)))
                 by_date={_parse_date(day.date):day for day in section.days if _parse_date(day.date)}
                 advice_count=0
                 for offset in range((end-start).days+1):

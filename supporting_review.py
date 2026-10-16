@@ -1,6 +1,7 @@
 """Internal cross-document evidence checks, never external document authentication."""
 from collections import Counter
 from validator import ValidationIssue, Severity, _parse_date, name_issue
+from document_sources import source_is_grounded
 import re
 import pymupdf
 
@@ -22,6 +23,13 @@ def check_supporting(data,uploaded_files=None):
     for document in data.supporting_documents:
         label=f"Supporting Documents ({document.source_file})"
         for claim in document.claims:
+            kinds = [document.document_type] + [kind for audit in data.document_audits if
+                audit.source_file == document.source_file for kind in audit.document_types]
+            is_id = any('nationalid' in _normal(kind).replace('_','') or 'بطاقة' in kind for kind in kinds)
+            if is_id and claim.field_name == 'passport_number':
+                # Correct a known extraction-type confusion, never compare the civil ID
+                # printed on an ID card with the passport's separate document number.
+                claim.field_name = 'national_id_number'
             grounded=True
             if uploaded_files is not None:
                 grounded=counts[document.source_file]==1 and bool(claim.quote and claim.page)
@@ -29,20 +37,44 @@ def check_supporting(data,uploaded_files=None):
                     with pymupdf.open(stream=files[document.source_file],filetype='pdf') as pdf:
                         grounded=1<=claim.page<=len(pdf)
                         if grounded:
-                            text=pdf[claim.page-1].get_text()
+                            text=pdf[claim.page-1].get_text(sort=True)
                             if len(text.strip())>=20:
-                                grounded=_normal(claim.quote) in _normal(text)
+                                grounded=source_is_grounded({'source_file':document.source_file,'page':claim.page,'text':claim.quote},uploaded_files)
+                                # Recover a real verbatim line when the model joined table
+                                # columns or used an ellipsis. The asserted literal value
+                                # must occur exactly once; never fabricate a quotation.
+                                if not grounded and claim.value:
+                                    matches=list(re.finditer(r'(?<!\w)'+re.escape(claim.value)+r'(?!\w)',text,re.I))
+                                    if len(matches)==1:
+                                        start=text.rfind('\n',0,matches[0].start())+1
+                                        end=text.find('\n',matches[0].end())
+                                        claim.quote=text[start:end if end!=-1 else len(text)].strip()
+                                        grounded=True
             if not grounded:
+                needs_resolution=claim.assessment=='conflicts' or claim.field_name in {
+                    'full_name','passport_number','date_of_birth','passport_issue','passport_expiry',
+                    'national_id_number','national_id_issue','national_id_expiry'}
                 claim.assessment="unverified"
+                # Neutral descriptive metadata remains visibly unverified. It was not
+                # used for a finding and must not invalidate the entire file review.
+                if not needs_resolution:
+                    continue
                 issues.append(ValidationIssue(document_name=label,field_name=claim.field_name,found_value=claim.value,
                     expected_value="Traceable quote on the supplied source page",severity=Severity.HIGH,message_key="evidence.incomplete",
-                    recommended_fix="The quoted evidence could not be located on its stated page. Verify the original before accepting this claim."))
+                    recommended_fix="The quoted evidence could not be located on its stated page. Verify the original before accepting this claim.", affects_score=False))
+                continue
+            # A parent's data and a first-name-only civil-register column are not a
+            # competing applicant travel identity. Retain them for context, without
+            # treating absent corroboration as a defect in the file.
+            if claim.subject_role != 'applicant' or claim.field_name == 'full_name' and claim.name_scope == 'first_only':
                 continue
             reference=references.get(claim.field_name)
             if claim.field_name=="full_name" and claim.value:
                 issue=name_issue(data.passport,claim.value,label)
                 claim.assessment="conflicts" if issue and issue.severity==Severity.CRITICAL else "unverified" if issue else "consistent"
-                if issue: issues.append(issue)
+                if issue:
+                    issue.evidence=[{'source_file':document.source_file,'page':claim.page,'text':claim.quote or claim.value}]
+                    issues.append(issue)
                 continue
             if reference and claim.value:
                 if claim.field_name=="date_of_birth" or claim.field_name.endswith(("issue","expiry","start","end","arrival","departure")):
@@ -63,9 +95,6 @@ def check_supporting(data,uploaded_files=None):
                     recommended_fix=claim.reason))
             else:
                 claim.assessment="unverified"
-                issues.append(ValidationIssue(document_name=label,field_name=claim.field_name,found_value=claim.value,
-                    expected_value="Readable corroborating evidence",severity=Severity.LOW,message_key="support.unverified",
-                    recommended_fix="This claim cannot be independently confirmed from the supplied documents. Verify it with the original or issuing source; consistent wording alone is not proof of authenticity."))
     return issues
 
 
@@ -82,17 +111,24 @@ def extraction_quality(data,uploaded_files):
             audit=audits.get(name) if names[name]==1 else None
             reported={p for p in audit.pages_read if 1<=p<=pages} if audit else set()
             total+=pages;read+=len(reported)
-            unresolved=names[name]!=1 or not audit or audit.readability!='readable' or len(reported)!=pages or bool(audit.uncertainties)
+            # Legibility/coverage is separate from notes about problems in readable text.
+            unresolved=names[name]!=1 or not audit or audit.readability!='readable' or len(reported)!=pages
             files.append({"file":name,"pages":pages,"pages_read":len(reported),"readability":audit.readability if audit else 'unreviewed',
                           "uncertainties":audit.uncertainties if audit else ["No page audit returned"]})
             if unresolved:
                 issues.append(ValidationIssue(document_name=f"Supporting Documents ({name})" if category=='supporting' else f"Document ({name})",
                     field_name="document_readability",found_value=f"{len(reported)} / {pages}",expected_value="Every page read and legible",
-                    severity=Severity.HIGH,message_key="evidence.incomplete",recommended_fix="Review every page of the original. Supply a clearer copy or verify the unreviewed/uncertain sections manually."))
+                    severity=Severity.HIGH,message_key="evidence.incomplete",affects_score=False,
+                    title_en="Source review is incomplete",
+                    recommended_fix="The automated review did not account for every source page. Rerun or inspect the original before accepting this result. This is a review limitation, not a confirmed document error."))
             if category=='supporting' and not any(d.source_file==name for d in data.supporting_documents):
                 issues.append(ValidationIssue(document_name=f"Supporting Documents ({name})",field_name="supporting_review",
                     found_value=None,expected_value="Document classification and evidence assessment",severity=Severity.HIGH,
-                    message_key="evidence.incomplete",recommended_fix="The supporting file has no traceable assessment. Verify its content before relying on it."))
+                    message_key="evidence.incomplete",affects_score=False, recommended_fix="The supporting file has no traceable assessment. Verify its content before relying on it."))
+    for limitation in data.review_limitations:
+        issues.append(ValidationIssue(document_name='Review limitations',field_name='review_coverage',found_value=None,
+            expected_value='A complete source-grounded review',severity=Severity.HIGH,affects_score=False,
+            title_en='Review could not be completed',recommended_fix=limitation))
     required=[data.passport.full_name,data.passport.passport_number,data.passport.date_of_birth,data.passport.passport_issue,data.passport.passport_expiry,
               data.visa_form.applicant_name,data.visa_form.passport_number,data.visa_form.intended_arrival,data.visa_form.intended_departure,
               data.flight.passenger_name,data.flight.departure_date,data.flight.return_date,data.insurance.insured_name,

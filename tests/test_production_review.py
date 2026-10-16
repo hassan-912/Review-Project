@@ -91,6 +91,11 @@ def test_supporting_passport_conflict_is_grounded_in_original(complete_extractio
     assert d.supporting_documents[0].claims[0].assessment=='conflicts'
     d.supporting_documents[0].claims[0].quote='Invented quotation'
     issues=check_supporting(d,{'supporting':[('support.pdf',raw)]})
+    assert issues[0].severity==Severity.CRITICAL
+    assert d.supporting_documents[0].claims[0].quote=='Passport number TEST99999. This is a fictional test.'
+    d.supporting_documents[0].claims[0].quote='Invented quotation'
+    d.supporting_documents[0].claims[0].value='TEST_NOT_ON_PAGE'
+    issues=check_supporting(d,{'supporting':[('support.pdf',raw)]})
     assert issues[0].message_key=='evidence.incomplete'
     assert d.supporting_documents[0].claims[0].assessment=='unverified'
 

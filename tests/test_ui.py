@@ -121,6 +121,14 @@ ui['render_report'](st.session_state.test_result)
     assert len(app.get('download_button'))==1
 
 
+def test_student_timeline_omits_inapplicable_hr_warning(complete_extraction):
+    import runpy
+    ui=runpy.run_path(str(APP_PATH))
+    complete_extraction.employment.evidence_type='education'
+    rows=ui['timeline_rows'](complete_extraction,[],'en')
+    assert not any(row[0]==t('doc_employment','en') for row in rows)
+
+
 @pytest.mark.parametrize('lang',['en','ar'])
 def test_super_admin_dashboard_and_controls(monkeypatch,lang):
     actor=accounts.Actor('00000000-0000-0000-0000-000000000001','owner@example.com',True,'super_admin','owner')

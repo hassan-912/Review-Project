@@ -23,6 +23,7 @@ import time
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Literal
+from PIL import Image
 
 import pymupdf as fitz  # Local PDF text extraction to cut token payload
 from google import genai
@@ -80,8 +81,9 @@ visa application files. You must:
    If a flight is Cairo → Amsterdam → Cairo, the ONLY extracted destination must be ["Amsterdam"].
    Never extract a non-Schengen departure city into the travel_cities or destinations JSON array.
 
-5. PURPOSE & HOME TIES: Verify the Cover Letter references assets, family ties, employment
-   ties, employer name, role, salary, approved leave, and the hotel/destination.
+5. PURPOSE & HOME TIES: Read the actual explanatory letter. Check only relevant, evidenced
+   ties (for example continued studies for a student). Never require employment particulars
+   from a student without separate evidence of employment, or invent assets/family support.
 
 OUTPUT RULES (STRICT):
 - Never identify yourself as an AI, Gemini, or LLM. You are "MG Assistant Bot".
@@ -107,6 +109,8 @@ class PassportInfo(BaseModel):
     given_names: Optional[str] = None
     surname: Optional[str] = None
     passport_issue: Optional[str] = Field(None, description="Date of issue on passport visual page, not MRZ; YYYY-MM-DD")
+    native_name: Optional[str] = Field(None, description="Full name in Arabic/native script copied from passport visual page only; no transliteration")
+    national_id_number: Optional[str] = Field(None, description="National ID number printed on passport visual page, separate from passport number")
 
 
 class FlightInfo(BaseModel):
@@ -120,6 +124,8 @@ class FlightInfo(BaseModel):
     passport_number: Optional[str] = None
     passport_issue: Optional[str] = None
     passport_expiry: Optional[str] = None
+    arrival_time: Optional[str] = Field(None, description="Arrival at final destination, local HH:MM; not departure or connection arrival")
+    return_departure_time: Optional[str] = Field(None, description="Return departure from destination, local HH:MM")
 
 
 class HotelInfo(BaseModel):
@@ -202,6 +208,7 @@ class EmploymentInfo(BaseModel):
     contract_type: Optional[str] = Field(
         None, description="Employment contract type e.g. permanent, fixed-term, part-time"
     )
+    evidence_type: Literal["employment", "education", "none", "unknown"] = "unknown"
 
 
 class VisaApplicationInfo(BaseModel):
@@ -222,6 +229,8 @@ class VisaApplicationInfo(BaseModel):
     national_id_number: Optional[str] = None
     national_id_issue: Optional[str] = None
     national_id_expiry: Optional[str] = None
+    occupation: Optional[str] = None
+    first_entry_country: Optional[str] = None
 
 
 class NationalIDInfo(BaseModel):
@@ -236,6 +245,8 @@ class IdentityEvidence(BaseModel):
     """One applicant identity block per source/page; no merged conflicting values."""
     document: Literal["visa_form", "hotel", "flight", "insurance", "cover_letter", "travel_plan", "supporting", "passport", "national_id", "employment"]
     source_file: str
+    subject_role: Literal["applicant", "mother", "father", "relative", "other", "unknown"] = "applicant"
+    name_scope: Literal["full", "first_only", "not_applicable"] = "full"
     page: Optional[int] = Field(None, ge=1)
     full_name: Optional[str] = None
     given_names: Optional[str] = None
@@ -307,6 +318,8 @@ class SupportingClaim(BaseModel):
     assessment: Literal["consistent","conflicts","unverified"] = "unverified"
     reason: Optional[str] = None
     compared_with: Optional[str] = Field(None, description="Filename of another supplied document supporting the assessment; not an external authenticity claim")
+    subject_role: Literal["applicant", "mother", "father", "relative", "other", "unknown"] = "applicant"
+    name_scope: Literal["full", "first_only", "not_applicable"] = "full"
 
 
 class SupportingDocument(BaseModel):
@@ -327,6 +340,7 @@ class DocumentAudit(BaseModel):
     pages_read: list[int] = Field(default_factory=list)
     readability: Literal["readable","partial","unreadable"] = "partial"
     uncertainties: list[str] = Field(default_factory=list)
+    summary: Optional[str] = None
 
     @field_validator("document_types","pages_read","uncertainties",mode="before")
     @classmethod
@@ -374,6 +388,10 @@ class VisaDocumentExtraction(BaseModel):
     executive_summary: Optional[str] = None
     urgent_actions: list[str] = Field(default_factory=list)
     model_used: Optional[str] = Field(None, exclude=True)
+    contextual_findings: list[dict] = Field(default_factory=list)
+    review_limitations: list[str] = Field(default_factory=list)
+    unverified_findings: list[dict] = Field(default_factory=list)
+    context_checks: list[dict] = Field(default_factory=list)
 
     @field_validator("passport","flight","insurance","cover_letter","business","employment","visa_form","national_id","cover_letter_text","travel_plan",mode="before")
     @classmethod
@@ -429,15 +447,22 @@ def _guess_mime(filename: str) -> str:
 # Prompt Builder
 # ---------------------------------------------------------------------------
 
+def _extraction_schema():
+    schema = VisaDocumentExtraction.model_json_schema()
+    for name in ('model_used','contextual_findings','review_limitations','unverified_findings','context_checks'):
+        schema['properties'].pop(name, None)
+    return schema
+
+
 def _build_extraction_prompt(doc_labels: list[str], lang: str = "en") -> str:
     """
     Build the master extraction prompt that instructs Gemini to parse
     all uploaded documents and return structured JSON.
     """
     doc_list = "\n".join(f"  - {label}" for label in doc_labels)
-    schema_json = json.dumps(VisaDocumentExtraction.model_json_schema(), separators=(",",":"))
     report_language = "Modern Standard Arabic" if lang == "ar" else "English"
 
+    schema_json = json.dumps(_extraction_schema(), separators=(',', ':'))
     return f"""You are an expert Schengen visa document analyst.
 You have been provided with the following uploaded documents for a Schengen visa application:
 {doc_list}
@@ -457,12 +482,16 @@ A single file can contain BOTH a cover letter and a day-by-day travel plan. Popu
 cover_letter, cover_letter_text AND travel_plan from their respective sections even when
 uploaded once under either category. Record source_files and page numbers.
 Populate detected_documents with every actual type found, including national_id when supplied.
+An enrollment certificate is education, not an HR/employment letter. Set visa_form.occupation
+from the form; employment.evidence_type=education for enrollment-only evidence. Extract
+passport.native_name and passport.national_id_number from the passport visual page only.
+Preserve month-only ID issue dates as YYYY-MM, without inventing a day.
 Transcribe identities independently: NEVER silently fix typos or copy passport values into
 application, hotel or flight fields. Preserve first/given names and surname exactly.
 Never fuzzy-match, expand initials or confuse O/0 or I/1. Extract passport_issue from the
 printed passport field (not MRZ). Keep national ID dates/number separate from passport.
 Do not invent ID expiry when not printed. Do not invent Latin transliteration of Arabic ID
-names; flag script ambiguity for human verification when no official transcription exists.
+names. Compare the native passport name and independent ID number before flagging ambiguity.
 Create identity_evidence for EVERY applicant block in EVERY application/booking/page,
 including multiple flight reservations. Exclude companions; flag ambiguity in unreadable_fields.
 Include conflicting versions, never choose only a matching one. Use null for unreadable fields.
@@ -479,9 +508,14 @@ national ID, employment, invitation, registry, tax, sponsor letter, or another a
 Populate supporting_documents with its source filename, readable summary, individual claims,
 exact quotes/pages, and comparison to other SUPPLIED evidence. A claim can be consistent,
 conflicts, or unverified. NEVER call a document authentic or a fact externally verified.
+For every claim record subject_role (applicant/mother/father/relative/other/unknown). Civil
+register first-name-only columns use name_scope=first_only; never expand them into invented
+full names or treat them as incomplete booking names. Parent identity is not applicant identity.
 Unsupported claims, unreadable fields and missing reference evidence stay unverified.
 Populate document_audits for EVERY uploaded file, recording actual pages read, actual types,
 readability and specific uncertainties. Do not claim to read omitted or blank/unreadable pages.
+An inspected blank page is read; record its page number without inventing content. Filename
+must be copied EXACTLY from the Document header, excluding category and '(file: ...)' wrapper.
 Populate evidence_locations for identity fields, travel/HR/insurance dates, hotel dates and
 other inconsistent facts. Use the exact original text, filename and 1-based page. Preserve
 the source spelling even when wrong. Include normalized value separately. Optional box
@@ -528,6 +562,8 @@ Pay close attention to:
 7. Destination — determine the Schengen country where applicant spends the most nights.
 8. Employment documents — extract employer name, job title, monthly salary, approved leave dates,
    whether leave approval is explicitly confirmed, and contract type.
+   Only actual employer/HR documents populate employment. A university is an educational institution.
+   Extract final flight arrival_time and return_departure_time as local HH:MM, from the correct legs.
 9. Cities — compile a complete list of ALL cities mentioned in hotel reservations and the
    travel itinerary. Store them in `travel_cities` as a JSON array of strings.
 
@@ -707,6 +743,56 @@ def _wait_for_files_active(
 _Slot = dict | int
 
 
+def _small_scan_details(filename, raw):
+    """Supply a readable crop when a scanned card occupies a small part of A4.
+
+    These are supplemental views of the actual page, not OCR guesses or new documents.
+    Source filenames and page numbers stay unchanged.
+    """
+    if not filename.lower().endswith('.pdf'):
+        return []
+    details = []
+    with fitz.open(stream=raw,filetype='pdf') as doc:
+        for number,page in enumerate(doc):
+            if number >= 4:
+                break
+            if len(details) >= 8 or len(page.get_text().strip()) >= 20:
+                continue
+            pix = page.get_pixmap(matrix=fitz.Matrix(1.7,1.7),alpha=False)
+            im = Image.open(io.BytesIO(pix.tobytes('png'))).convert('RGB')
+            mask = im.convert('L').point(lambda value: 255 if value < 235 else 0)
+            small = mask.resize((100,100),Image.Resampling.BOX).point(lambda value:255 if value>20 else 0)
+            # Ignore isolated scanner specks outside the document. Find substantial
+            # connected ink regions and join nearby regions of the same small card.
+            pixels=list(small.getdata());remaining={i for i,value in enumerate(pixels) if value}
+            components=[]
+            while remaining:
+                seed=remaining.pop();pending=[seed];component=[seed]
+                while pending:
+                    current=pending.pop();x,y=current%100,current//100
+                    for dx,dy in ((-1,0),(1,0),(0,-1),(0,1)):
+                        nx,ny=x+dx,y+dy;neighbor=ny*100+nx
+                        if 0<=nx<100 and 0<=ny<100 and neighbor in remaining:
+                            remaining.remove(neighbor);pending.append(neighbor);component.append(neighbor)
+                if len(component)>=8:
+                    components.append((len(component),(min(v%100 for v in component),min(v//100 for v in component),
+                        max(v%100 for v in component)+1,max(v//100 for v in component)+1)))
+            box=max(components,default=(0,None))[1]
+            if box:
+                for _ in range(3):
+                    for _,region in components:
+                        if region[0]<=box[2]+4 and region[2]>=box[0]-4 and region[1]<=box[3]+4 and region[3]>=box[1]-4:
+                            box=(min(box[0],region[0]),min(box[1],region[1]),max(box[2],region[2]),max(box[3],region[3]))
+            if not box or (box[2]-box[0])*(box[3]-box[1]) >= 5000 or box[2]-box[0] < 15:
+                continue
+            crop = im.crop((max(0,box[0]-1)*im.width//100,max(0,box[1]-1)*im.height//100,
+                            min(100,box[2]+1)*im.width//100,min(100,box[3]+1)*im.height//100))
+            output=io.BytesIO();crop.save(output,format='PNG')
+            details.extend([{'text':f'Supplemental original-page detail: source_file={filename}, page={number+1}. Same source, enlarged content region.'},
+                            {'inline_data':{'mime_type':'image/png','data':output.getvalue()}}])
+    return details
+
+
 def _classify_content(
     uploaded_files: dict[str, list[tuple[str, bytes]]],
 ) -> tuple[list[_Slot], list[tuple[str, str, bytes]], list[str]]:
@@ -761,6 +847,7 @@ def _classify_content(
                     mime = _guess_mime(filename)
                     slots.append(len(upload_tasks))   # placeholder
                     upload_tasks.append((label, mime, file_bytes))
+            slots.extend(_small_scan_details(filename, file_bytes))
 
     return slots, upload_tasks, doc_labels
 
@@ -807,7 +894,8 @@ def call_gemini_with_fallback(
         raise ValueError("Unsupported model")
     return generate_automatically(client,contents,types.GenerateContentConfig(
         system_instruction=MG_SYSTEM_INSTRUCTION,temperature=0.0,
-        max_output_tokens=32768,response_mime_type="application/json"),
+        max_output_tokens=32768,response_mime_type="application/json",
+        ),
         router=router,validate=validate,log_fn=log_fn,model_callback=model_callback)
 
 
@@ -931,7 +1019,14 @@ def extract_documents(
         # Parse JSON response → Pydantic model
         # ------------------------------------------------------------------
         result = _parse_response(raw_text)
+        result.contextual_findings = []
+        result.review_limitations = []
         result.model_used = used_models[0]
+        # A separate read of the originals checks context, classification and omissions.
+        # The first pass is a draft, not a verdict, and must not grade its own omissions.
+        from context_review import review_context
+        result = review_context(client, file_parts, uploaded_files, result, lang=lang,
+                                router=router, log_fn=_log)
         return result
 
     finally:

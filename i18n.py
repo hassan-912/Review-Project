@@ -8,6 +8,25 @@ def _add(key, en, ar):
     STRINGS[key] = {"en": en, "ar": ar}
 
 
+_add('review_incomplete', 'Review incomplete — score is provisional', 'المراجعة غير مكتملة — الدرجة مبدئية')
+_add('review_limitation', 'Review limitation · no score deduction', 'قيد في المراجعة · دون خصم نقاط')
+_add('review_limitations', 'Review limitations', 'قيود المراجعة')
+_add('field_approved_leave_dates', 'Approved leave dates', 'تواريخ الإجازة المعتمدة')
+_add('field_document_readability', 'Source page coverage', 'تغطية صفحات المصدر')
+_add('field_destination_country', 'Application main destination', 'الوجهة الرئيسية في الطلب')
+_add('field_cover_letter_completeness', 'Cover letter completeness', 'اكتمال الخطاب التوضيحي')
+_add('write_flight_day_arrival','The final-destination flight arrives at {time}. Make the first day consistent with that arrival and airport transfer.','تصل رحلة الوجهة النهائية الساعة {time}. اجعل برنامج اليوم الأول متوافقاً مع الوصول والانتقال من المطار.')
+_add('write_flight_day_arrival_fix','Arrival at {time}; allow time for airport formalities and transfer before hotel check-in and optional activities. Confirm the transfer duration.','الوصول الساعة {time}؛ اترك وقتاً لإجراءات المطار والانتقال قبل دخول الفندق والأنشطة الاختيارية، وتحقق من مدة الانتقال.')
+_add('write_flight_day_departure','The return flight departs at {time}. Plan checkout and the airport journey around the airline’s confirmed check-in deadline.','تغادر رحلة العودة الساعة {time}. حدد مغادرة الفندق والانتقال للمطار وفق الموعد المؤكد لإغلاق تسجيل السفر لدى الشركة.')
+_add('write_flight_day_departure_fix','Flight departure at {time}; work backwards from the verified check-in deadline to set hotel checkout and transfer. Remove sightseeing that would compromise that schedule.','إقلاع الرحلة الساعة {time}؛ حدد موعد مغادرة الفندق والانتقال اعتماداً على الموعد المتحقق لإغلاق التسجيل، واحذف أي جولة تعطل هذا الجدول.')
+_add('write_purpose_grounded','I plan to visit {country} from {start} to {end} for [confirmed purpose]. Explain why the itinerary suits that purpose.','أخطط لزيارة {country} من {start} إلى {end} بغرض [الغرض المؤكد]. اشرح سبب ملاءمة البرنامج لهذا الغرض.')
+_add('write_funding_placeholder','[Actual payer] will cover [confirmed expenses], supported by [supplied evidence]. Explain the source of material recent deposits where relevant. Account access alone does not establish sponsorship.','سيتحمل [الممول الفعلي] [المصروفات المؤكدة] وفق [المستند المرفق]. وضح مصدر الإيداعات الحديثة الكبيرة عند الاقتضاء؛ تفويض استخدام الحساب وحده لا يثبت الكفالة المالية.')
+_add('write_ties_placeholder','Describe [actual obligations after the trip], such as continuing studies or employment, with [supporting dates/documents]. Confirm the applicant’s real plans before stating an intention to return.','اشرح [الالتزامات الفعلية بعد الرحلة] مثل استمرار الدراسة أو العمل، مع [المواعيد والمستندات المؤيدة]. تأكد من خطة مقدم الطلب الحقيقية قبل صياغة نية العودة.')
+_add('write_calendar_verify','Verify the official holiday calendar and venue availability for this day. Statements in the itinerary have not been independently confirmed.','تحقق من التقويم الرسمي للعطلات وتوافر الأماكن في هذا اليوم؛ لم يتم تأكيد ما تقوله الخطة عن العطلات والمواعيد من مصدر مستقل.')
+_add('write_calendar_action','Confirm the official calendar, attraction opening hours and restaurant availability before finalizing this day.','أكد التقويم الرسمي ومواعيد فتح المعالم وتوافر المطاعم قبل اعتماد برنامج هذا اليوم.')
+_add('write_student_ties','Explain the applicant’s continuing studies and actual obligations after the trip using the enrollment evidence and confirmed dates. Confirm any required university travel permission; do not request an employment HR letter for a student without separate employment.','وضح استمرار دراسة مقدم الطلب والتزاماته الفعلية بعد الرحلة وفق شهادة القيد والمواعيد المؤكدة، وتحقق من أي موافقة سفر جامعية مطلوبة. لا تطلب خطاب عمل لطالب دون وجود عمل مستقل.')
+
+
 _COPY = [
     ("brand", "MG · Visa File Review", "MG · مراجعة ملفات التأشيرات"),
     ("language", "Language", "اللغة"),
@@ -410,6 +429,12 @@ for item in [
     _add(*item)
 
 ISSUE_AR.update({
+    'context.application_completeness':'أكمل بيانات الاتصال والهوية المطلوبة والفارغة في نموذج الطلب وفق التفاصيل المتحققة لمقدم الطلب.',
+    'context.translation_dob':'راجع تاريخ الميلاد المكتوب بالأرقام والشهر المكتوب بالحروف مع الأصل، واطلب تصحيح الترجمة مع الحفاظ على صاحب البيان الصحيح.',
+    'context.reservation_validity':'انتهت نافذة السداد المطبوعة في هذه النسخة. اطلب تأكيداً حديثاً من الشركة أو حجزاً صالحاً؛ لا تثبت هذه النسخة وحدها أن الحجز ألغي ولا تعني وجوب شراء تذكرة.',
+    'context.translation_honorific':'اطلب تصحيح لقب مقدم الطلب في الترجمة وفق الجواز. هذا خطأ في الصياغة وليس دليلاً على اختلاف هوية مقدم الطلب.',
+    'context.cover_letter_completeness':'أضف أو أكمل الخطاب التوضيحي ليشرح الغرض من الزيارة والتمويل والارتباط ببلد الإقامة، بوقائع تدعمها المستندات وقائمة بالمرفقات. خطة الأنشطة وحدها ليست خطاباً توضيحياً.',
+    'context.destination_country':'صحح خانة الوجهة الرئيسية في نموذج الطلب لتوافق الدولة ذات الإقامة الرئيسية الفعلية. خانة أول دخول منفصلة عنها.',
     "identity.name_format":"استخدم الاسم الكامل في جواز السفر أو الاسم الأول واسم العائلة الكامل فقط، وبنفس التهجئة. لا تقبل الأسماء الفارغة.",
     "dates.exact":"يجب أن تتطابق مواعيد الرحلة مع التواريخ في نموذج طلب التأشيرة دون هامش زمني. صحح المستند المختلف وفق المواعيد المؤكدة.",
     "dates.boundary":"موعد المستند خارج فترة السفر في نموذج الطلب. اجعل الحجوزات والخطة تغطي الفترة الصحيحة كاملة.",

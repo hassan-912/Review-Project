@@ -1,5 +1,6 @@
 """Exact identity comparisons. Missing/ambiguous evidence can never be a clean match."""
 import re
+import unicodedata
 from validator import ValidationIssue, Severity, _names_match, _parse_date, name_issue, _name_parts
 
 
@@ -15,7 +16,7 @@ def strict_identity_checks(data, existing=()):
             "national_id_expiry":data.national_id.expiry_date}
     seen = set()
 
-    def flag(doc, field, found, expected, reason="mismatch"):
+    def flag(doc, field, found, expected, reason="mismatch", scored=True):
         key = (doc, field, found, expected, reason)
         if key in seen:
             return
@@ -25,8 +26,21 @@ def strict_identity_checks(data, existing=()):
         if reason != "mismatch":
             fix = "Manual verification required: obtain a clear original or official transcription before submission. This field is unresolved."
         issues.append(ValidationIssue(document_name=doc,field_name=field,found_value=found,
-            expected_value=str(expected or "Readable authoritative identity evidence"),severity=Severity.CRITICAL,
-            recommended_fix=fix,message_key="identity."+reason))
+            expected_value=str(expected or "Readable authoritative identity evidence"),severity=Severity.CRITICAL if scored else Severity.HIGH,
+            recommended_fix=fix,message_key="identity."+reason,affects_score=scored))
+
+    def native_name(value):
+        value = re.sub(r'[\u064b-\u065f\u0670\u0640]', '', value or '')
+        return value.translate(str.maketrans({'أ':'ا', 'إ':'ا', 'آ':'ا', 'ى':'ي'}))
+
+    def date_parts(value):
+        if parsed := _parse_date(value):
+            return parsed.year, parsed.month, parsed.day
+        if re.fullmatch(r'\d{4}-\d{2}', value or ''):
+            year, month = map(int, value.split('-'))
+            if 1 <= month <= 12:
+                return year, month
+        return None
 
     def check(doc, field, found):
         if not found:
@@ -37,7 +51,17 @@ def strict_identity_checks(data, existing=()):
         elif field in ("full_name", "given_names", "surname"):
             # Different scripts cannot be resolved by speculative transliteration.
             if bool(re.search(r"[\u0600-\u06ff]",found)) != bool(re.search(r"[\u0600-\u06ff]",ref)):
-                flag(doc,field,found,ref,"unreadable")
+                native = data.passport.native_name
+                if field == 'full_name' and native and re.search(r'[\u0600-\u06ff]', found):
+                    from extractor import PassportInfo
+                    issue = name_issue(PassportInfo(full_name=native_name(native)), native_name(found), doc)
+                    if issue:
+                        issue.field_name = field
+                        issues.append(issue)
+                else:
+                    # Different writing systems are not a spelling error. No speculative
+                    # transliteration and no identity deduction for a missing script bridge.
+                    flag(doc,field,found,ref,"unreadable",scored=False)
             elif field=="full_name":
                 issue=name_issue(data.passport,found,doc)
                 if issue:
@@ -48,10 +72,10 @@ def strict_identity_checks(data, existing=()):
             elif not _names_match(ref,found,allow_short=False):
                 flag(doc,field,found,ref)
         elif field.endswith(("issue", "expiry")) or field=="date_of_birth":
-            a,b = _parse_date(ref),_parse_date(found)
+            a,b = date_parts(ref),date_parts(found)
             if not a or not b:
                 flag(doc,field,found,ref,"unreadable")
-            elif a != b:
+            elif a[:min(len(a),len(b))] != b[:min(len(a),len(b))]:
                 flag(doc,field,found,ref)
         elif re.sub(r"\s+","",found).upper() != re.sub(r"\s+","",ref).upper():
             flag(doc,field,found,ref)
@@ -70,7 +94,11 @@ def strict_identity_checks(data, existing=()):
             flag("National ID","full_name",None,refs["full_name"],"unreadable")
         if not data.national_id.id_number:
             flag("National ID","national_id_number",None,None,"unreadable")
+        if data.passport.national_id_number and data.national_id.id_number and data.passport.national_id_number != data.national_id.id_number:
+            flag('National ID','national_id_number',data.national_id.id_number,data.passport.national_id_number)
     for row in data.identity_evidence:
+        if getattr(row,'subject_role','applicant') != 'applicant' or row.document == 'supporting' and getattr(row,'name_scope','full') == 'first_only':
+            continue
         doc = labels[row.document]+f" ({row.source_file}"+(f", p. {row.page}" if row.page else "")+")"
         for field in row.unreadable_fields:
             flag(doc,field,None,refs.get(field),"unreadable")
@@ -96,7 +124,7 @@ def strict_identity_checks(data, existing=()):
             if hotel is None or not hotel.guest_name:
                 flag(f"Hotel Reservation ({index})","full_name",None,refs["full_name"],"unreadable")
     for field,ref in refs.items():
-        if ref and field.endswith(("issue","expiry")) and not _parse_date(ref):
+        if ref and field.endswith(("issue","expiry")) and not date_parts(ref):
             flag("National ID" if field.startswith("national_id") else "Passport",field,ref,None,"unreadable")
     for doc,obj,start,end in [("Passport",data.passport,"passport_issue","passport_expiry"),
                              ("National ID",data.national_id,"issue_date","expiry_date")]:

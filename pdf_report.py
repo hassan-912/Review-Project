@@ -39,14 +39,22 @@ def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en
         # Keep ISO dates in their original order within Arabic sentences.
         if lang=='ar':
             text=re.sub(r'\b\d{4}-\d{2}-\d{2}\b',lambda m:'\u200e'+m.group()+'\u200e',text)
-        pdf.set_text_shaping(True,direction='rtl' if re.search(r'[\u0600-\u06ff]',text) else 'ltr')
+        if re.search(r'[\u0600-\u06ff]',text):
+            pdf.set_text_shaping(True,direction='rtl')
+        else:
+            # Reset HarfBuzz between scripts. Keeping it enabled for a Latin row
+            # after an Arabic fallback run can drop the reference value entirely.
+            pdf.set_text_shaping(False)
+        # A fallback run can leave current_font changed while font_family still names
+        # the primary family. Force a switch before resetting the primary font.
+        pdf.set_font(fallback, "B" if bold else "", size)
         pdf.set_font(primary, "B" if bold else "", size)
         pdf.set_text_color(*color)
         pdf.multi_cell(0, 7 if size < 14 else 10, text, align=alignment,
                        new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     def field_row(label,value,size=10):
-        if lang=='ar':
+        if lang=='ar' or re.search(r'[\u0600-\u06ff]',str(value)):
             # Separate Arabic labels from Latin values: the pinned fallback-font shaper
             # can otherwise drop labels and reorder numeric dates in mixed lines.
             row(label,size,True)
@@ -57,7 +65,8 @@ def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en
     row(t("pdf_title", lang), 20, True, (0,103,218))
     row(t("pdf_subtitle", lang), color=(80,96,122))
     pdf.ln(4)
-    row(f'{t("score_title", lang)}: {score_result.score:.0f}% · {t(score_badge(score_result.score), lang)}', 14, True)
+    badge = 'review_incomplete' if score_result.provisional else score_badge(score_result.score)
+    row(f'{t("score_title", lang)}: {score_result.score:.0f}% · {t(badge, lang)}', 14, True)
     row(t(score_result.readiness,lang),11,True)
     row(t("score_note", lang), 9, color=(80,96,122))
     pdf.ln(4)
@@ -72,23 +81,42 @@ def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en
         row(t("summary", lang), 13, True)
         row(extraction.executive_summary)
         pdf.ln(3)
-    row(t("findings_count", lang, count=len(issues)), 13, True)
-    if not issues:
+    findings = [issue for issue in issues if issue.affects_score]
+    limitations = [issue for issue in issues if not issue.affects_score]
+    row(t("findings_count", lang, count=len(findings)), 13, True)
+    if not findings:
         row(t("no_issues", lang))
     order = {"CRITICAL":0, "HIGH":1, "MEDIUM":2, "LOW":3}
-    for issue in sorted(issues, key=lambda x: order[x.severity.value]):
+    for issue in sorted(findings, key=lambda x: order[x.severity.value]):
         title, fix = issue_text(issue, lang)
+        if pdf.will_page_break(65):
+            pdf.add_page()
         pdf.ln(3)
-        label=issue.document_name.split(' (')[0] if lang=='ar' else issue.document_name
-        row(f'[{t(issue.severity.value.lower(), lang)}] {document_label(label, lang)} · {title}', 11, True)
+        # Put filenames in their own source rows; Arabic filenames inside an English
+        # heading reverse the surrounding title under bidirectional text layout.
+        label=issue.document_name.split(' (')[0]
+        severity_label = t(issue.severity.value.lower(), lang) if issue.affects_score else t('review_limitation', lang)
+        row(f'[{severity_label}] {document_label(label, lang)} · {title}', 11, True)
         if issue.found_value:
             field_row(t("found",lang),issue.found_value,9)
         field_row(t("expected",lang),issue.expected_value,9)
         field_row(t("fix",lang),fix,10)
+        seen_sources=set()
         for location in issue.evidence:
+            key=(location['source_file'],location['page'])
+            if key in seen_sources:continue
+            seen_sources.add(key)
             field_row(t("source",lang),location["source_file"]+" · "+str(location["page"]),9)
+    if limitations:
+        pdf.ln(4)
+        row(t('review_limitations',lang),13,True)
+        row(t('review_limitation',lang),9)
+        for issue in limitations:
+            row(issue_text(issue,lang)[1],9)
     from writing_review import writing_recommendations
     writing = writing if writing is not None else writing_recommendations(extraction,lang)
+    if pdf.will_page_break(80):
+        pdf.add_page()
     pdf.ln(4)
     row(t("writing_title",lang),13,True)
     row(t("writing_note",lang),9)
@@ -97,6 +125,8 @@ def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en
         if not edits:
             row(t("writing_ok",lang))
         for edit in edits:
+            if pdf.will_page_break(45):
+                pdf.add_page()
             row(t("edit_"+edit.action,lang)+": "+edit.reason)
             if edit.day: field_row(t("day",lang),edit.day,9)
             if edit.source_file:

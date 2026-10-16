@@ -1,5 +1,40 @@
 # MG Visa File Review — production release
 
+## Context review correction — 2026-10-16
+
+Reviews now use an extraction pass followed by an independent contextual read of the
+original sources. Both passes use the existing free-model router and quota accounting;
+fallback attempts and the extra inference consume the configured free quotas. The second
+pass must account for every supplied filename, page and review criterion. Identical uploads
+are read once; same-named files with different contents receive distinct source identifiers.
+Small scanned cards receive supplementary crops from their original pages in memory.
+
+Student enrollment is classified separately from employment. Native-script names are
+compared to the passport's native name, and ID dates retain their printed precision.
+Supporting claims preserve the subject's role and first-name-only register columns.
+Application destination is compared directly with the booked main destination; country
+language/code aliases and equal-night ties are handled without selecting an arbitrary winner.
+
+Readable PDF form cells supply blank contact/identity findings. Explicit payment-hold
+conditions and numeric-versus-written translation dates are checked against source text.
+Contextual findings require traceable quotes; actual source lines can repair an imprecise
+model quotation only when the asserted literal value is located unambiguously. Missing page
+audits and unresolved evidence are review limitations, not deductions from the applicant's
+file. Incomplete reviews display a provisional score. Neutral unverified descriptive claims
+remain marked unverified without becoming invented document defects.
+
+Missing cover-letter sections are grouped into one finding. When no letter exists, writing
+templates use grounded trip details and explicit placeholders rather than invented funding
+or return obligations. Flight-day advice uses final-destination arrival and return departure
+times. Source references remain attached to the actual file/page. The PDF exporter resets
+fallback fonts between scripts so an Arabic run cannot hide subsequent English references.
+
+Regression tests use synthetic identities/documents. Private live-case review artifacts
+remain under ignored local directories and are never committed.
+The corrected release passes 180 offline regression/UI tests. A private live two-pass
+review was checked against the original pages, including the side-by-side evidence view
+and a rendered three-page PDF; the source documents are not part of the repository.
+
 ## Free hosting
 
 Live deployment: **https://mg-visa-review.streamlit.app/** (2026-10-12).

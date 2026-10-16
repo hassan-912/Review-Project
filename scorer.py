@@ -64,6 +64,7 @@ class ScoreResult:
     medium_count: int
     low_count: int
     readiness: str = "needs_attention"
+    provisional: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +106,9 @@ def calculate_score(
         Severity.MEDIUM: 0,
         Severity.LOW: 0,
     }
-    for issue in issues:
+    scored_issues = [issue for issue in issues if issue.affects_score]
+    provisional = any(not issue.affects_score for issue in issues)
+    for issue in scored_issues:
         counts[issue.severity] = counts.get(issue.severity, 0) + 1
 
     # ------------------------------------------------------------------
@@ -155,7 +158,10 @@ def calculate_score(
     # ------------------------------------------------------------------
     # Determine badge
     # ------------------------------------------------------------------
-    if score >= 85.0:
+    if provisional:
+        badge_label = "Review incomplete — provisional score"
+        badge_color = "yellow"
+    elif score >= 85.0:
         badge_label = "File checks passed"
         badge_color = "green"
     elif score >= 65.0:
@@ -176,7 +182,8 @@ def calculate_score(
         high_count=counts[Severity.HIGH],
         medium_count=counts[Severity.MEDIUM],
         low_count=counts[Severity.LOW],
-        readiness="not_ready" if counts[Severity.CRITICAL] else "needs_attention" if issues else "checks_passed",
+        readiness="not_ready" if counts[Severity.CRITICAL] else "review_incomplete" if provisional else "needs_attention" if scored_issues else "checks_passed",
+        provisional=provisional,
     )
 
 
@@ -198,7 +205,8 @@ def _leave_is_confirmed(data) -> bool:
     """
     Helper: return True if employment docs confirm an approved leave letter.
     """
-    return bool(
+    from validator import employment_applies
+    return bool(employment_applies(data) and
         hasattr(data, "employment")
         and data.employment.leave_approval_confirmed is True
     )

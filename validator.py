@@ -57,6 +57,7 @@ class ValidationIssue(BaseModel):
     fix_ar: str = ""
     evidence: list[dict] = Field(default_factory=list)
     reference_evidence: list[dict] = Field(default_factory=list)
+    affects_score: bool = True
 
     @model_validator(mode="after")
     def localized_messages(self):
@@ -136,6 +137,16 @@ def _names_match(name_a: Optional[str], name_b: Optional[str], given_names=None,
 def name_issue(passport, found, document):
     """Known partial-name formats get a note; wrong spellings and blanks are critical."""
     reference=passport.full_name
+    if found and reference and bool(re.search(r'[\u0600-\u06ff]',found)) != bool(re.search(r'[\u0600-\u06ff]',reference)):
+        native = getattr(passport,'native_name',None)
+        if native and re.search(r'[\u0600-\u06ff]', found):
+            def normalize_native(text):
+                text = re.sub(r'[\u064b-\u065f\u0670\u0640]','',text)
+                return text.translate(str.maketrans({'أ':'ا','إ':'ا','آ':'ا','ى':'ي'}))
+            return name_issue(passport.model_copy(update={'full_name':normalize_native(native), 'given_names':None, 'surname':None}), normalize_native(found), document)
+        return ValidationIssue(document_name=document,field_name='applicant_name',found_value=found,
+            expected_value=reference,severity=Severity.HIGH,affects_score=False,message_key='identity.unreadable',
+            recommended_fix='Compare the native-script passport name and independently printed ID number. Different scripts alone do not establish a spelling mismatch.')
     if reference and found and _names_match(reference,found,passport.given_names,passport.surname):
         return None
     partial=bool(_name_parts(reference) and _name_parts(found) and not (Counter(_name_parts(found))-Counter(_name_parts(reference))))
@@ -150,6 +161,28 @@ def accommodation_window(data):
     ends = [_parse_date(h.check_out_date) for h in data.hotel]
     return (min((d for d in starts if d), default=None),
             max((d for d in ends if d), default=None))
+
+
+def country_key(value):
+    """Normalize language/code aliases, never turn a genuinely different country into a match."""
+    value=re.sub(r'\s+',' ',str(value or '').strip().casefold())
+    aliases={
+        'germany':('de','deu','deutschland'), 'greece':('gr','grc','griechenland'),
+        'france':('fr','fra','frankreich'), 'italy':('it','ita','italien'),
+        'spain':('es','esp','spanien'), 'netherlands':('nl','nld','niederlande','the netherlands'),
+        'belgium':('be','bel','belgien'), 'austria':('at','aut','österreich'),
+        'switzerland':('ch','che','schweiz'), 'sweden':('se','swe','schweden'),
+        'denmark':('dk','dnk','dänemark'), 'norway':('no','nor','norwegen'),
+        'iceland':('is','isl','island'), 'czech republic':('cz','cze','czechia','tschechien'),
+        'hungary':('hu','hun','ungarn'), 'poland':('pl','pol','polen'),
+        'portugal':('pt','prt'), 'finland':('fi','fin','finnland'),
+        'estonia':('ee','est','estland'), 'latvia':('lv','lva','lettland'),
+        'lithuania':('lt','ltu','litauen'), 'luxembourg':('lu','lux','luxemburg'),
+        'malta':('mt','mlt'), 'slovenia':('si','svn','slowenien'),
+        'slovakia':('sk','svk','slowakei'), 'croatia':('hr','hrv','kroatien'),
+        'romania':('ro','rou','rumänien'), 'bulgaria':('bg','bgr','bulgarien'),
+        'liechtenstein':('li','lie')}
+    return next((country for country,words in aliases.items() if value==country or value in words),value)
 
 
 def _check_passport_number_crosscheck(data: VisaDocumentExtraction) -> list[ValidationIssue]:
@@ -375,9 +408,11 @@ def _check_schengen_destination_rule(data: VisaDocumentExtraction) -> list[Valid
     if data.total_nights_per_country and data.main_schengen_destination:
         nights = data.total_nights_per_country
         if nights:
-            actual_main = max(nights, key=lambda k: nights[k])
+            winners = [country for country, count in nights.items() if count == max(nights.values())]
+            # Equal nights do not establish one winning country by dictionary order.
+            actual_main = winners[0] if len(winners) == 1 else None
             declared = data.main_schengen_destination.strip().lower()
-            if actual_main.lower() != declared:
+            if actual_main and country_key(actual_main) != country_key(declared):
                 issues.append(ValidationIssue(message_key='validation.10',
                     document_name="Travel Plan / Itinerary",
                     field_name="main_schengen_destination",
@@ -391,6 +426,17 @@ def _check_schengen_destination_rule(data: VisaDocumentExtraction) -> list[Valid
                     ),
                 ))
 
+    winners = []
+    if data.total_nights_per_country:
+        largest = max(data.total_nights_per_country.values())
+        winners = [country for country, count in data.total_nights_per_country.items() if count == largest]
+    actual = winners[0] if len(winners) == 1 else data.main_schengen_destination if not winners else None
+    declared = data.visa_form.destination_country
+    if actual and declared and country_key(actual) != country_key(declared):
+        issues.append(ValidationIssue(document_name='Visa Application Form', field_name='destination_country',
+            found_value=declared, expected_value=actual, severity=Severity.HIGH,
+            message_key='context.destination_country', title_en='Main destination conflicts with the trip',
+            recommended_fix=f"Correct the application's main destination to {actual}, consistent with the actual itinerary and accommodation. First entry is a separate field."))
     return issues
 
 
@@ -456,9 +502,23 @@ def _check_passport_expiry(data: VisaDocumentExtraction) -> list[ValidationIssue
     return issues
 
 
+def employment_applies(data):
+    emp = data.employment
+    if emp.evidence_type == 'employment':
+        return True
+    if emp.evidence_type in ('education', 'none'):
+        return False
+    # Legacy/draft extraction may place a university in employer_name. An occupation
+    # of student without any actual employment particulars is not employment evidence.
+    student = bool(re.search(r'\bstudent\b|trainee|طالب|طالبة', data.visa_form.occupation or emp.job_title or '', re.I))
+    return not (student and not emp.monthly_salary and not emp.contract_type and not emp.approved_leave_start and not emp.approved_leave_end)
+
+
 def _check_employment_leave_dates(data: VisaDocumentExtraction) -> list[ValidationIssue]:
     issues=[]
     emp=data.employment
+    if not employment_applies(data):
+        return issues
     if not emp.employer_name and not emp.approved_leave_start and not emp.approved_leave_end:
         return issues
     a,b=_parse_date(emp.approved_leave_start),_parse_date(emp.approved_leave_end)
@@ -499,6 +559,8 @@ def _check_employment_consistency(data: VisaDocumentExtraction) -> list[Validati
     """
     issues: list[ValidationIssue] = []
     emp = data.employment
+    if not employment_applies(data):
+        return issues
 
     # Skip if no employment data uploaded
     if not emp.employer_name and not emp.job_title:
@@ -553,15 +615,20 @@ def _check_missing_fields(data: VisaDocumentExtraction) -> list[ValidationIssue]
     issues: list[ValidationIssue] = []
 
     critical_checks = [
-        ("Cover Letter",       "purpose_of_visit",    data.cover_letter.purpose_of_visit,    "A clear statement of visit purpose"),
-        ("Cover Letter",       "funding_source",       data.cover_letter.funding_source,       "Statement of how the trip is funded"),
-        ("Cover Letter",       "ties_to_home_country", data.cover_letter.ties_to_home_country, "Evidence of ties to home country"),
         ("Flight Reservation", "departure_date",       data.flight.departure_date,             "Outbound flight date"),
         ("Flight Reservation", "return_date",          data.flight.return_date,                "Return flight date"),
         ("Travel Insurance",   "valid_from",           data.insurance.valid_from,              "Policy start date"),
         ("Travel Insurance",   "valid_until",          data.insurance.valid_until,             "Policy end date"),
         ("Travel Itinerary",   "travel_plan_coverage", data.travel_plan.present,                "A dated travel plan covering the application dates"),
     ]
+    missing = [label for field, label in [('purpose_of_visit','visit purpose'), ('funding_source','funding'),
+                                         ('ties_to_home_country','home ties')] if not getattr(data.cover_letter,field)]
+    if missing:
+        issues.append(ValidationIssue(document_name='Cover Letter',field_name='cover_letter_completeness',
+            found_value='Missing: ' + ', '.join(missing), expected_value='A factual cover letter explaining purpose, funding and home ties',
+            severity=Severity.HIGH, message_key='context.cover_letter_completeness', title_en='Cover letter is missing or incomplete',
+            recommended_fix='Add or complete the applicant cover letter, explaining ' + ', '.join(missing) +
+                '. Use supported facts and list the supplied attachments. A hotel description or itinerary is not a cover letter.'))
     if not data.hotel:
         critical_checks.append(("Hotel Reservation", "hotel", None, "Accommodation bookings"))
     for index, hotel in enumerate(data.hotel):

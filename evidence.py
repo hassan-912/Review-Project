@@ -4,6 +4,7 @@ from io import BytesIO
 import re
 import pymupdf
 from PIL import Image
+from document_sources import source_is_grounded
 
 ALIASES = {
     "full_name": {"full_name","applicant_name","passenger_name","guest_name","insured_name"},
@@ -60,8 +61,10 @@ def attach_evidence(issues,data,uploaded_files):
     for issue in issues:
         category=_category(issue.document_name)
         allowed=_fields(issue.field_name)
+        explicit = {name for name in names if name in issue.document_name}
         def matching(value, wanted):
             candidates=[loc for loc in locations if loc["field_name"] in allowed
+                        and (not explicit or wanted != category or loc['source_file'] in explicit)
                         and (not wanted or categories.get(loc["source_file"])==wanted or _category(loc["document"])==wanted)]
             exact=[loc for loc in candidates if value and _normal(loc.get("value"))==_normal(value)]
             # A differently extracted field is not evidence of the asserted value.
@@ -69,15 +72,20 @@ def attach_evidence(issues,data,uploaded_files):
             for loc in exact:
                 unique.setdefault((loc["source_file"],loc["page"]),loc)
             return list(unique.values())[:2]
-        issue.evidence=matching(issue.found_value,category)
+        issue.evidence=[loc for loc in issue.evidence if source_is_grounded(loc,uploaded_files)] or matching(issue.found_value,category)
         if not issue.evidence:
             # Explicitly a page preview, not an invented bounding box or confirmed error location.
-            candidates=[name for name in names if names[name]==1 and (name in issue.document_name or categories[name]==category)]
+            candidates=[name for name in names if names[name]==1 and
+                        (name in explicit if explicit else category not in (None,'supporting') and categories[name]==category)]
             issue.evidence=[{"source_file":name,"page":1,"field_name":issue.field_name,"value":issue.found_value,
                              "text":issue.found_value or "","box":None,"preview":True} for name in candidates[:2]]
-        reference=("employment" if issue.message_key=="hr.window" else "national_id" if issue.field_name.startswith("national_id") else
+        reference=("hotel" if issue.field_name=='destination_country' else "employment" if issue.message_key=="hr.window" else "national_id" if issue.field_name.startswith("national_id") else
                    "passport" if any(w in issue.field_name for w in ("name","passport","birth")) else "visa_form")
-        issue.reference_evidence=matching(issue.expected_value,reference)
+        issue.reference_evidence=[loc for loc in issue.reference_evidence if source_is_grounded(loc,uploaded_files)] or matching(issue.expected_value,reference)
+        if not issue.affects_score and not issue.reference_evidence:
+            continue
+        if not issue.reference_evidence and not any(word in issue.field_name for word in ('name','passport','national_id','birth','date','start','end','arrival','departure','destination')):
+            continue
         if not issue.reference_evidence:
             # A printed passport or HR/application page can still help the reviewer verify a correction.
             candidates=[loc for loc in locations if (categories.get(loc["source_file"])==reference or _category(loc["document"])==reference) and loc["field_name"] in allowed]
@@ -108,7 +116,7 @@ def render_source(location,uploaded_files):
             pages=range(len(doc)) if location.get("preview") and quote else [page_number-1]
             for index in pages:
                 page=doc[index]
-                found=page.search_for(quote) if quote and len(quote.strip())>=2 else []
+                found=page.search_for(quote) if quote and len(quote.strip())>=2 and not location.get('layout') else []
                 if found:
                     rect=pymupdf.Rect(found[0])
                     rect=pymupdf.Rect(rect.x0-65,rect.y0-35,rect.x1+65,rect.y1+35)&page.rect
@@ -117,7 +125,7 @@ def render_source(location,uploaded_files):
             page=doc[page_number-1]; rect=page.rect; method='page_preview'
             if valid_box and not location.get('preview'):
                 rect=pymupdf.Rect(box[0]*rect.width,box[1]*rect.height,box[2]*rect.width,box[3]*rect.height)
-                method='model_region'
+                method='matched_region' if location.get('layout') else 'model_region'
             scale=min(2,1200/max(rect.width,rect.height))
             pix=page.get_pixmap(matrix=pymupdf.Matrix(scale,scale),clip=rect,alpha=False)
             return pix.tobytes('png'),page_number,method

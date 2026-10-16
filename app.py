@@ -372,6 +372,7 @@ def run_review(uploaded_files,model_id,client_name,force_refresh=False):
 
 
 def timeline_rows(extraction,issues,lang):
+    from validator import employment_applies
     flight_start=_parse_date(extraction.flight.departure_date)
     flight_end=_parse_date(extraction.flight.return_date)
     rows=[]
@@ -385,6 +386,8 @@ def timeline_rows(extraction,issues,lang):
         ("insurance",extraction.insurance.valid_from,extraction.insurance.valid_until),
     ])
     for category,start,end in records:
+        if category=='employment' and not employment_applies(extraction):
+            continue
         a,b=_parse_date(start),_parse_date(end)
         status="check"
         if flight_start and flight_end and flight_start<flight_end and a and b and a<b:
@@ -441,7 +444,10 @@ def render_fix_checklist(issues,result=None):
     for index,issue in enumerate(filtered):
         title,fix=issue_text(issue,st.session_state.lang)
         with st.container(border=True,key=f"card_issue_{index}"):
-            st.html(pill(issue.severity.value.lower()))
+            if issue.affects_score:
+                st.html(pill(issue.severity.value.lower()))
+            else:
+                st.caption(t('review_limitation'))
             st.caption(document_label(issue.document_name,st.session_state.lang))
             st.markdown('**'+escape(title)+'**')
             st.text(fix)
@@ -463,20 +469,22 @@ def render_fix_checklist(issues,result=None):
 
 def render_report(result):
     data,issues,score=result["extraction"],result["issues"],result["score"]
+    findings = [issue for issue in issues if issue.affects_score]
+    limitations = [issue for issue in issues if not issue.affects_score]
     left,right=st.columns([1,1.6],gap="large")
     with left:
         with st.container(border=True,key="card_score"):
             st.caption(t("score_title"))
             st.html(f'<div class="score-number ltr">{score.score:.0f}%</div>')
-            badge=score_badge(score.score)
+            badge='review_incomplete' if score.provisional else score_badge(score.score)
             color="success" if score.score>=85 else "medium" if score.score>=65 else "high"
             st.html(pill(badge,color))
-            (st.error if score.readiness=="not_ready" else st.info if score.readiness=="needs_attention" else st.success)(t(score.readiness))
+            (st.error if score.readiness=="not_ready" else st.info if score.readiness in ("needs_attention",'review_incomplete') else st.success)(t(score.readiness))
             st.caption(t("score_note"))
         with st.container(border=True,key="card_urgent"):
             st.subheader(t("urgent"))
-            if issues:
-                for index,issue in enumerate(issues[:3],1):
+            if findings:
+                for index,issue in enumerate(findings[:3],1):
                     title,fix=issue_text(issue,st.session_state.lang)
                     st.markdown(f'**{index}. {escape(title)}**')
                     st.text(fix)
@@ -495,7 +503,12 @@ def render_report(result):
                 st.caption(t("tourism"))
                 known=bool(data.travel_cities) and all(c.lower() in _SCHENGEN_CITIES for c in data.travel_cities)
                 st.write(t("tourism_known" if known else "tourism_check"))
-        render_fix_checklist(issues,result)
+        render_fix_checklist(findings,result)
+    if limitations:
+        st.subheader(t('review_limitations'))
+        st.caption(t('review_limitation'))
+        for limitation in limitations:
+            st.info(limitation.recommended_fix)
     if quality:=result.get("quality"):
         st.subheader(t("quality_title"))
         complete,pages,model=st.columns(3)
@@ -545,11 +558,13 @@ def render_report(result):
         for key in ("purpose_of_visit","funding_source","ties_to_home_country","attached_documents_listed","employer_mentioned"):
             status="present" if getattr(data.cover_letter,key) else "missing"
             st.write(field_label(key,st.session_state.lang)+": "+t(status))
-    with audit_right,st.expander(t("employment_audit")):
-        for key in ("employer_name","job_title","monthly_salary","approved_leave_start","approved_leave_end","leave_approval_confirmed"):
-            value=getattr(data.employment,key)
-            if isinstance(value,bool): value=t("yes" if value else "no")
-            st.text(field_label(key,st.session_state.lang)+": "+isolated_value(value or t("unknown"),st.session_state.lang))
+    from validator import employment_applies
+    if employment_applies(data):
+        with audit_right,st.expander(t("employment_audit")):
+            for key in ("employer_name","job_title","monthly_salary","approved_leave_start","approved_leave_end","leave_approval_confirmed"):
+                value=getattr(data.employment,key)
+                if isinstance(value,bool): value=t("yes" if value else "no")
+                st.text(field_label(key,st.session_state.lang)+": "+isolated_value(value or t("unknown"),st.session_state.lang))
     with st.expander(t("extracted")):
         for key in ("full_name","given_names","surname","passport_number","date_of_birth","passport_issue","passport_expiry"):
             st.text(field_label(key,st.session_state.lang)+": "+isolated_value(getattr(data.passport,key) or t("unknown"),st.session_state.lang))

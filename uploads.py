@@ -12,7 +12,7 @@ CATEGORIES = (
     "passport", "visa_form", "cover_letter", "hotel", "flight",
     "insurance", "employment", "travel_plan", "supporting",
 )
-SCHEMA_VERSION = "review-v4-evidence-auto-models"
+SCHEMA_VERSION = "review-v5-context-audit"
 
 
 def files_hash(files: dict, model: str, lang: str = "en") -> str:
