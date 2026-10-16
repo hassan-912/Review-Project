@@ -1,7 +1,7 @@
 """
 scorer.py
 =========
-Acceptance likelihood scoring engine for Schengen visa applications.
+Internal file-consistency score with an independent critical-finding readiness gate.
 
 Starts from 100% and applies severity-based deductions for each
 detected ValidationIssue. Returns a final percentage and a color-coded
@@ -63,6 +63,7 @@ class ScoreResult:
     high_count: int
     medium_count: int
     low_count: int
+    readiness: str = "needs_attention"
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +76,7 @@ def calculate_score(
     leave_confirmed: bool = False,
 ) -> ScoreResult:
     """
-    Calculate the Schengen visa acceptance likelihood score.
+    Calculate an internal consistency score; this does not predict visa approval.
 
     Parameters
     ----------
@@ -130,7 +131,7 @@ def calculate_score(
     # ------------------------------------------------------------------
     # Apply bonuses
     # ------------------------------------------------------------------
-    if cover_letter_complete:
+    if cover_letter_complete and counts[Severity.CRITICAL]==0:
         bonus = BONUS_COVER_LETTER_COMPLETE
         score += bonus
         bonus_detail.append({
@@ -138,7 +139,7 @@ def calculate_score(
             "points_added": bonus,
         })
 
-    if leave_confirmed:
+    if leave_confirmed and counts[Severity.CRITICAL]==0:
         bonus = BONUS_LEAVE_APPROVAL_CONFIRMED
         score += bonus
         bonus_detail.append({
@@ -148,18 +149,20 @@ def calculate_score(
 
     # Clamp score to [0, 100]
     score = max(0.0, min(100.0, score))
+    if counts[Severity.CRITICAL]:
+        score=min(score,64.0)
 
     # ------------------------------------------------------------------
     # Determine badge
     # ------------------------------------------------------------------
     if score >= 85.0:
-        badge_label = "Strong — Likely Approved"
+        badge_label = "File checks passed"
         badge_color = "green"
     elif score >= 65.0:
         badge_label = "Moderate — Needs Attention"
         badge_color = "yellow"
     else:
-        badge_label = "Weak — High Risk of Rejection"
+        badge_label = "File requires correction"
         badge_color = "red"
 
     return ScoreResult(
@@ -173,6 +176,7 @@ def calculate_score(
         high_count=counts[Severity.HIGH],
         medium_count=counts[Severity.MEDIUM],
         low_count=counts[Severity.LOW],
+        readiness="not_ready" if counts[Severity.CRITICAL] else "needs_attention" if issues else "checks_passed",
     )
 
 

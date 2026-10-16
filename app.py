@@ -26,6 +26,8 @@ from review_pipeline import review_documents
 from validator import _parse_date, accommodation_window, _SCHENGEN_CITIES
 from recovery import recovery_tokens
 from writing_review import writing_recommendations
+from evidence import render_source
+from model_routing import ModelUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -262,7 +264,7 @@ def render_upload_ui():
     st.write(t("review_description"))
     client_name = st.text_input(t("client_name"), placeholder=t("client_placeholder"),max_chars=150,key="client_name")
     with st.expander(t("advanced")):
-        model = st.selectbox(t("model"),AVAILABLE_MODELS,key="selected_model")
+        st.caption(t("auto_models"))
         force = st.checkbox(t("force_refresh"),help=t("force_help"),key="force_refresh")
     st.subheader(t("upload_title"))
     st.caption(t("upload_hint"))
@@ -290,7 +292,7 @@ def render_upload_ui():
         with st.expander(t("missing_documents")):
             st.write(", ".join(t("doc_"+category) for category in missing))
             st.caption(t("missing_hint"))
-    return uploaded,model,client_name,force
+    return uploaded,"auto",client_name,force
 
 
 def run_review(uploaded_files,model_id,client_name,force_refresh=False):
@@ -298,7 +300,7 @@ def run_review(uploaded_files,model_id,client_name,force_refresh=False):
     client_name=client_name.strip()
     if not client_name or len(client_name)>150:
         st.error(t("client_required")); return
-    if model_id not in AVAILABLE_MODELS:
+    if model_id != "auto":
         st.error(t("config_missing")); return
     try:
         validate_uploads(uploaded_files)
@@ -328,7 +330,8 @@ def run_review(uploaded_files,model_id,client_name,force_refresh=False):
             def update(step):
                 with progress.container():
                     render_pipeline_stepper(step)
-            result=review_documents(setting("GEMINI_API_KEY"),uploaded_files,model_id,st.session_state.lang,update)
+            router=accounts.model_router(client,session)
+            result=review_documents(setting("GEMINI_API_KEY"),uploaded_files,model_id,st.session_state.lang,update,router=router)
             if len(cache)>=3:
                 cache.pop(next(iter(cache)))
             cache[key]=(now,result.copy())
@@ -352,6 +355,8 @@ def run_review(uploaded_files,model_id,client_name,force_refresh=False):
         st.success(t("review_complete"))
     except AccountError as exc:
         st.error(t(str(exc)))
+    except ModelUnavailable:
+        st.error(t("models_unavailable"))
     except Exception:
         reference=uuid.uuid4().hex[:10]
         # Exception messages and tracebacks can contain extracted client evidence or tokens.
@@ -405,7 +410,28 @@ def render_travel_date_timeline(extraction,issues):
         st.caption(" · ".join(str(x) for x in (hotel.hotel_name,hotel.city,hotel.check_in_date,hotel.check_out_date) if x))
 
 
-def render_fix_checklist(issues):
+def render_evidence_images(locations,result,prefix):
+    if not locations or not result.get("source_files"):
+        st.caption(t("evidence_unavailable")); return
+    cache=result.setdefault("evidence_images",{})
+    for index,location in enumerate(locations[:2]):
+        key=repr(sorted(location.items()))
+        if key not in cache:
+            if len(cache)>=16: cache.pop(next(iter(cache)))
+            try:
+                cache[key]=render_source(location,result["source_files"])
+            except Exception:
+                cache[key]=None
+        source=cache[key]
+        if source:
+            png,page,method=source
+            st.image(png,caption=f'{location["source_file"]} · {t("page")} {page}',width="stretch")
+            st.caption(t(method))
+        else:
+            st.caption(t("evidence_unavailable"))
+
+
+def render_fix_checklist(issues,result=None):
     st.subheader(t("checklist"))
     options=["all","critical","high","medium","low"]
     severity=st.pills(t("severity"),options,default="all",format_func=t,key="severity_filter") or "all"
@@ -419,9 +445,20 @@ def render_fix_checklist(issues):
             st.caption(document_label(issue.document_name,st.session_state.lang))
             st.markdown('**'+escape(title)+'**')
             st.text(fix)
-            with st.expander(t("evidence")):
-                st.text(t("found")+": "+isolated_value(issue.found_value or t("unknown"),st.session_state.lang))
-                st.text(t("expected")+": "+isolated_value(issue.expected_value,st.session_state.lang))
+            # Stable key follows the issue across severity filtering. Crops render only on demand.
+            issue_index=next(i for i,v in enumerate(issues) if v is issue)
+            with st.expander(t("evidence"),key=f'evidence_{(result or {}).get("hash", "report")}_{issue_index}',on_change="rerun") as panel:
+                if panel.open:
+                    st.caption(t("evidence_note"))
+                    source,expected=st.columns(2)
+                    with source:
+                        st.markdown("**"+t("source_left")+"**")
+                        st.text(t("found")+": "+isolated_value(issue.found_value or t("unknown"),st.session_state.lang))
+                        render_evidence_images(issue.evidence,result or {},"source")
+                    with expected:
+                        st.markdown("**"+t("correction_right")+"**")
+                        st.text(t("expected")+": "+isolated_value(issue.expected_value,st.session_state.lang))
+                        render_evidence_images(issue.reference_evidence,result or {},"reference")
 
 
 def render_report(result):
@@ -434,6 +471,7 @@ def render_report(result):
             badge=score_badge(score.score)
             color="success" if score.score>=85 else "medium" if score.score>=65 else "high"
             st.html(pill(badge,color))
+            (st.error if score.readiness=="not_ready" else st.info if score.readiness=="needs_attention" else st.success)(t(score.readiness))
             st.caption(t("score_note"))
         with st.container(border=True,key="card_urgent"):
             st.subheader(t("urgent"))
@@ -457,7 +495,30 @@ def render_report(result):
                 st.caption(t("tourism"))
                 known=bool(data.travel_cities) and all(c.lower() in _SCHENGEN_CITIES for c in data.travel_cities)
                 st.write(t("tourism_known" if known else "tourism_check"))
-        render_fix_checklist(issues)
+        render_fix_checklist(issues,result)
+    if quality:=result.get("quality"):
+        st.subheader(t("quality_title"))
+        complete,pages,model=st.columns(3)
+        complete.metric(t("completeness"),f'{quality["completeness"]}%')
+        pages.metric(t("pages_read"),f'{quality["pages_reported_read"]} / {quality["pages_total"]}')
+        model.caption(t("model_used")); model.text(result.get("model_used",t("unknown")))
+        st.caption(t("quality_note"))
+        with st.expander(t("source")):
+            for item in quality["files"]:
+                st.text(f'{item["file"]} · {item["pages_read"]} / {item["pages"]}')
+                for uncertainty in item.get("uncertainties",[]): st.text(uncertainty)
+    if data.supporting_documents:
+        st.subheader(t("supporting_title")); st.caption(t("supporting_note"))
+        for doc in data.supporting_documents:
+            with st.expander(doc.source_file):
+                st.text(doc.document_type); st.text(doc.summary)
+                for claim in doc.claims:
+                    st.markdown("**"+t(claim.assessment)+"**")
+                    st.text(field_label(claim.field_name,st.session_state.lang)+": "+(claim.value or t("unknown")))
+                    if claim.quote: st.text(claim.quote)
+                    if claim.page: st.caption(t("page")+" "+str(claim.page))
+                    if claim.reason: st.text(claim.reason)
+                    if claim.compared_with: st.caption(t("source")+": "+claim.compared_with)
     writing=result.get("writing") or writing_recommendations(data,st.session_state.lang)
     st.subheader(t("writing_title"))
     st.caption(t("writing_note"))
@@ -471,6 +532,7 @@ def render_report(result):
                 st.write(t("writing_ok"))
             for edit in writing[key]:
                 st.markdown("**"+t("edit_"+edit.action)+"**")
+                if edit.day: st.text(t("day")+": "+edit.day)
                 if edit.source_file:
                     st.text(edit.source_file+(f" · {edit.page}" if edit.page else ""))
                 if edit.original_text:
@@ -586,22 +648,87 @@ def render_admin_dashboard():
             with identity:
                 st.text(profile.get("username") or profile.get("email") or profile["id"])
                 st.text(profile.get("email") or "")
+                st.caption(t(profile.get("role","user")))
                 st.html(pill("approved" if profile.get("is_approved") else "pending", "success" if profile.get("is_approved") else "waiting"))
             with action:
                 approved=bool(profile.get("is_approved"))
                 if st.button(t("revoke" if approved else "approve"),key="approval_"+profile["id"],
-                             disabled=profile["id"]==st.session_state.actor.user_id,width="stretch"):
+                             disabled=profile["id"]==st.session_state.actor.user_id or profile.get("role")!="user",width="stretch"):
                     try:
                         accounts.set_approval(client,session,profile["id"],not approved)
                         st.session_state.notice="access_updated"
                         st.rerun()
                     except AccountError as exc:
                         st.error(t(str(exc)))
+            if st.session_state.actor.role=="super_admin":
+                with st.expander(t("role")+" / "+t("daily_limit")):
+                    with st.form("permissions_"+profile["id"]):
+                        roles=["user","admin","super_admin"]
+                        role=st.selectbox(t("role"),roles,index=roles.index(profile.get("role","user")),format_func=t,key="role_"+profile["id"])
+                        approved=st.checkbox(t("approved"),value=bool(profile.get("is_approved")),key="approved_"+profile["id"])
+                        hour=st.number_input(t("hourly_limit"),1,100,value=profile.get("hourly_limit",5),key="hour_"+profile["id"])
+                        day=st.number_input(t("daily_limit"),1,1000,value=profile.get("daily_limit",20),key="day_"+profile["id"])
+                        if st.form_submit_button(t("save_changes")):
+                            try:
+                                accounts.super_update(client,session,profile["id"],role,approved,hour,day)
+                                st.session_state.notice="access_updated"; st.rerun()
+                            except AccountError as exc:
+                                st.error(t(str(exc)))
+    if st.session_state.actor.role=="super_admin":
+        render_model_dashboard(client,session)
     st.subheader(t("review_log"))
     render_logs(rows,team=True)
     with st.expander(t("attempts")):
         st.caption(t("attempts_hint"))
         render_logs(attempts,team=True,key_prefix="attempts")
+
+
+def render_model_dashboard(client,session):
+    st.subheader(t("model_dashboard"))
+    if st.button(t("refresh_usage")): st.rerun()
+    try:
+        snapshot=accounts.model_dashboard(client,session)
+    except Exception:
+        st.error(t("history_failed")); return
+    st.caption(t("quota_note"))
+    reset=datetime.fromisoformat(snapshot["day_resets_at"]).astimezone(ZoneInfo("Africa/Cairo"))
+    st.caption(t("quota_reset",date=reset.strftime("%Y-%m-%d %H:%M")))
+    with st.form("app_controls"):
+        enabled=st.checkbox(t("reviews_enabled"),value=snapshot["reviews_enabled"])
+        if st.form_submit_button(t("save_changes")):
+            try:
+                accounts.set_reviews_enabled(client,session,enabled)
+                st.session_state.notice="access_updated"; st.rerun()
+            except Exception:
+                st.error(t("access_update_failed"))
+    for model in snapshot["models"]:
+        with st.container(border=True):
+            st.markdown("**"+model["model"]+"**")
+            used,left,errors=st.columns(3)
+            used.metric(t("requests_today"),model["requests_today"])
+            left.metric(t("remaining_today"),max(0,model["rpd"]-model["requests_today"]))
+            errors.metric(t("errors_today"),model["errors_today"])
+            st.caption(f'{t("requests_minute")}: {model["requests_minute"]} / {model["rpm"]} · {t("tokens_minute")}: {model["tokens_minute"]} / {model["tpm"]}')
+            st.caption(f'{t("input_tokens_today")}: {model["input_tokens_today"]} · {t("output_tokens_today")}: {model["output_tokens_today"]} · {t("pending_today")}: {model["pending_today"]}')
+            st.caption(t("quota_source")+": "+model["quota_source"]+" · "+model["quota_checked_at"][:10])
+            if model.get("cooldown_until") and datetime.fromisoformat(model["cooldown_until"])>datetime.now(ZoneInfo("UTC")):
+                st.info(t("cooldown",date=datetime.fromisoformat(model["cooldown_until"]).astimezone(ZoneInfo("Africa/Cairo")).strftime("%Y-%m-%d %H:%M")))
+            with st.expander(t("advanced")):
+                with st.form("model_"+model["model"]):
+                    on=st.checkbox(t("enabled"),value=model["enabled"])
+                    priority=st.number_input(t("priority"),1,100,value=model["priority"])
+                    lite=model["model"].endswith("flash-lite")
+                    rpm=st.number_input(t("rpm"),1,15 if lite else 5,value=model["rpm"])
+                    tpm=st.number_input(t("tpm"),1,250000,value=model["tpm"])
+                    rpd=st.number_input(t("rpd"),1,500 if lite else 20,value=model["rpd"])
+                    if st.form_submit_button(t("save_changes")):
+                        try:
+                            accounts.configure_model(client,session,model["model"],on,priority,rpm,tpm,rpd)
+                            st.session_state.notice="access_updated"; st.rerun()
+                        except AccountError as exc:
+                            st.error(t(str(exc)))
+    with st.expander(t("admin_audit")):
+        st.dataframe(snapshot["audit"],hide_index=True)
 
 
 def render_how_it_works():
@@ -635,7 +762,7 @@ def main():
         st.session_state.review_cache={}
         render_pending_screen(); return
     nav,out=st.columns([5,1])
-    pages=["review","history","how"]+(["admin"] if actor.role=="admin" else [])
+    pages=["review","history","how"]+(["admin"] if actor.role in ("admin","super_admin") else [])
     if st.session_state.get("current_page") not in pages:
         st.session_state.current_page="review"
     with nav:

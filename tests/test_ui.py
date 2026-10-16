@@ -119,3 +119,55 @@ ui['render_report'](st.session_state.test_result)
     assert not app.warning
     assert any(s.value==t('summary',lang) for s in app.subheader)
     assert len(app.get('download_button'))==1
+
+
+@pytest.mark.parametrize('lang',['en','ar'])
+def test_super_admin_dashboard_and_controls(monkeypatch,lang):
+    actor=accounts.Actor('00000000-0000-0000-0000-000000000001','owner@example.com',True,'super_admin','owner')
+    monkeypatch.setattr(accounts,'verified_actor',lambda *a,**kw:actor)
+    monkeypatch.setattr(accounts,'refresh_if_needed',lambda client,session:session)
+    monkeypatch.setattr(accounts,'review_logs',lambda *a,**kw:[])
+    monkeypatch.setattr(accounts,'team_profiles',lambda *a,**kw:[dict(id=actor.user_id,email=actor.email,username=actor.username,
+        is_approved=True,role='super_admin',hourly_limit=5,daily_limit=20)])
+    monkeypatch.setattr(accounts,'team_attempts',lambda *a,**kw:[])
+    from model_routing import FREE_MODELS
+    models=[dict(model=name,priority=index+1,enabled=True,rpm=5,tpm=250000,rpd=20,requests_today=2,requests_minute=0,
+        tokens_minute=0,input_tokens_today=50,output_tokens_today=40,errors_today=1,pending_today=0,
+        quota_source='AI Studio Free tier',quota_checked_at='2026-10-16T00:00:00Z',cooldown_until=None) for index,name in enumerate(FREE_MODELS)]
+    monkeypatch.setattr(accounts,'model_dashboard',lambda *a,**kw:dict(day_resets_at='2026-10-17T07:00:00Z',reviews_enabled=True,models=models,audit=[]))
+    app=AppTest.from_file(APP_PATH,default_timeout=30)
+    app.session_state.lang=lang;app.session_state.auth_client=object()
+    app.session_state.supabase_session=SimpleNamespace(expires_at=time.time()+1000,access_token='test',refresh_token='test')
+    app.session_state.current_page='admin';app.run()
+    assert not app.exception
+    assert len([m for m in app.metric if m.label==t('remaining_today',lang) and m.value=='18'])==4
+    assert any(c.label==t('reviews_enabled',lang) for c in app.checkbox)
+    assert any(t('quota_note',lang)==c.value for c in app.caption)
+
+
+def test_evidence_renders_real_source_left_and_reference_right(complete_extraction):
+    from tests.test_production_review import pdf_bytes
+    from extractor import SourceField
+    from validator import ValidationIssue,Severity
+    from evidence import attach_evidence
+    data=complete_extraction
+    data.evidence_locations=[SourceField(document='flight',source_file='flight.pdf',page=1,field_name='full_name',value='MG TEST APPLICANX',text='MG TEST APPLICANX'),
+        SourceField(document='passport',source_file='passport.pdf',page=1,field_name='full_name',value=data.passport.full_name,text=data.passport.full_name)]
+    issue=ValidationIssue(document_name='Flight Reservation',field_name='full_name',found_value='MG TEST APPLICANX',expected_value=data.passport.full_name,
+        severity=Severity.CRITICAL,recommended_fix='Correct the booking name')
+    files={'flight':[('flight.pdf',pdf_bytes('FICTIONAL FLIGHT: MG TEST APPLICANX'))],
+        'passport':[('passport.pdf',pdf_bytes('FICTIONAL PASSPORT: MG TEST APPLICANT'))]}
+    attach_evidence([issue],data,files)
+    source=f"""
+import runpy,streamlit as st
+ui=runpy.run_path({str(APP_PATH)!r})
+ui['_init_session_state']()
+ui['render_fix_checklist'](st.session_state.test_result['issues'],st.session_state.test_result)
+"""
+    app=AppTest.from_string(source,default_timeout=30)
+    app.session_state.test_result={'issues':[issue],'source_files':files}
+    app.session_state['evidence_report_0']=True
+    app.run()
+    assert not app.exception
+    assert len(app.session_state.test_result.get('evidence_images',{}))==2
+    assert len(app.get('image'))==2

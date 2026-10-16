@@ -74,7 +74,9 @@ def writing_recommendations(data, lang="en", source_texts=None):
             elif any(not day.date or not day.city or not day.activities for day in section.days):
                 edits.append(WritingRecommendation(action="add",reason=t("write_plan_activities",lang)))
             from validator import _parse_date
-            start,end=_parse_date(data.flight.departure_date),_parse_date(data.flight.return_date)
+            from validator import application_window
+            from datetime import timedelta
+            start,end=application_window(data)
             dates={_parse_date(day.date) for day in section.days}
             dates.discard(None)
             if start and end and start<=end and section.days:
@@ -83,5 +85,22 @@ def writing_recommendations(data, lang="en", source_texts=None):
                     edits.append(WritingRecommendation(action="verify",reason=t("write_plan_dates",lang)))
             if section.start_date and start and _parse_date(section.start_date)!=start or section.end_date and end and _parse_date(section.end_date)!=end:
                 edits.append(WritingRecommendation(action="verify",reason=t("write_plan_dates",lang)))
+            if start and end and 0<=(end-start).days<=366:
+                by_date={_parse_date(day.date):day for day in section.days if _parse_date(day.date)}
+                advice_count=0
+                for offset in range((end-start).days+1):
+                    if advice_count>=14: break
+                    current=start+timedelta(days=offset)
+                    day=by_date.get(current)
+                    hotels=[h for h in data.hotel if (a:=_parse_date(h.check_in_date)) and (b:=_parse_date(h.check_out_date)) and a<=current<b]
+                    stay="; ".join(" · ".join(v for v in (h.city,h.hotel_name) if v) for h in hotels)
+                    if day is None or not day.activities or not day.city:
+                        advice_count+=1
+                        edits.append(WritingRecommendation(action="add",day=str(current),reason=t("write_specific_day",lang,day=str(current)),
+                            replacement=t("write_day_structure",lang,day=str(current),stay=stay or t("unknown",lang))))
+                    previous=by_date.get(current-timedelta(days=1))
+                    if day and previous and day.city and previous.city and day.city.casefold()!=previous.city.casefold() and not day.transport:
+                        advice_count+=1
+                        edits.append(WritingRecommendation(action="verify",day=str(current),reason=t("write_transfer",lang,day=str(current),origin=previous.city,destination=day.city)))
         result[key] = edits
     return result

@@ -10,8 +10,7 @@ Changes in this version
 -----------------------
 * Accepts multi-file lists per document category.
 * Adds EmploymentInfo schema (employer, job title, salary, leave dates).
-* Model selector: user-chosen model with automatic 429 fallback to
-  gemini-1.5-flash and exponential back-off retry logic.
+* Automatic free-model routing with per-project quota reservations and structured-output validation.
 """
 
 from __future__ import annotations
@@ -29,7 +28,7 @@ import pymupdf as fitz  # Local PDF text extraction to cut token payload
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field, field_validator
-from settings import setting
+from model_routing import FREE_MODELS, generate_automatically
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +36,8 @@ logger = logging.getLogger(__name__)
 # Available Models — tried in order; first success wins
 # ---------------------------------------------------------------------------
 
-# Priority list: primary → second fallback → third fallback.
-# 404 NOT_FOUND → skip immediately to the next model (invalid endpoint).
-# 429 RESOURCE_EXHAUSTED → sleep 3 s then skip to the next model.
-# Any other exception → raised immediately.
-AVAILABLE_MODELS: list[str] = list(dict.fromkeys(
-    m.strip() for m in setting("GEMINI_MODELS", "gemini-3.6-flash,gemini-3.5-flash-lite").split(",") if m.strip()
-))
+# Verified free document models; actual priority and availability come from ModelRouter.
+AVAILABLE_MODELS: list[str] = list(FREE_MODELS)
 
 # Timeout in milliseconds passed to types.HttpOptions.
 # 300,000 ms = 5 minutes — covers large PDF uploads on slow connections
@@ -247,6 +241,7 @@ class IdentityEvidence(BaseModel):
     given_names: Optional[str] = None
     surname: Optional[str] = None
     passport_number: Optional[str] = None
+    date_of_birth: Optional[str] = None
     passport_issue: Optional[str] = None
     passport_expiry: Optional[str] = None
     national_id_number: Optional[str] = None
@@ -262,6 +257,7 @@ class WritingRecommendation(BaseModel):
     original_text: Optional[str] = Field(None, description="Exact verbatim words from this section only. Required for remove/replace.")
     reason: str
     replacement: Optional[str] = Field(None, description="Concrete proposed wording grounded in evidence; bracketed placeholders for missing facts")
+    day: Optional[str] = Field(None, description="Specific itinerary date YYYY-MM-DD when advice relates to one day")
 
 
 class TravelDay(BaseModel):
@@ -293,6 +289,51 @@ class NarrativeSection(BaseModel):
         return [] if value is None else value
 
 
+class SourceField(BaseModel):
+    document: str
+    source_file: str
+    page: int = Field(ge=1)
+    field_name: str
+    value: Optional[str] = None
+    text: str = Field(description="Exact original words around this field; never translate or silently correct")
+    box: Optional[list[float]] = Field(None, min_length=4, max_length=4, description="Optional [x0,y0,x1,y1] coordinates normalized 0..1; only when visible and confidently located")
+
+
+class SupportingClaim(BaseModel):
+    field_name: str = Field(description="Canonical field: full_name, passport_number, date_of_birth, employer_name, job_title, monthly_salary, funding_source, or other clear field name")
+    value: Optional[str] = None
+    page: Optional[int] = Field(None,ge=1)
+    quote: Optional[str] = None
+    assessment: Literal["consistent","conflicts","unverified"] = "unverified"
+    reason: Optional[str] = None
+    compared_with: Optional[str] = Field(None, description="Filename of another supplied document supporting the assessment; not an external authenticity claim")
+
+
+class SupportingDocument(BaseModel):
+    source_file: str
+    document_type: str
+    summary: str
+    claims: list[SupportingClaim] = Field(default_factory=list)
+
+    @field_validator("claims",mode="before")
+    @classmethod
+    def empty_claims(cls,value):
+        return [] if value is None else value
+
+
+class DocumentAudit(BaseModel):
+    source_file: str
+    document_types: list[str] = Field(default_factory=list)
+    pages_read: list[int] = Field(default_factory=list)
+    readability: Literal["readable","partial","unreadable"] = "partial"
+    uncertainties: list[str] = Field(default_factory=list)
+
+    @field_validator("document_types","pages_read","uncertainties",mode="before")
+    @classmethod
+    def empty_audit_lists(cls,value):
+        return [] if value is None else value
+
+
 class VisaDocumentExtraction(BaseModel):
     """
     Master extraction schema — all fields extracted across all uploaded
@@ -311,6 +352,9 @@ class VisaDocumentExtraction(BaseModel):
     cover_letter_text: NarrativeSection = Field(default_factory=NarrativeSection)
     travel_plan: NarrativeSection = Field(default_factory=NarrativeSection)
     detected_documents: list[str] = Field(default_factory=list)
+    evidence_locations: list[SourceField] = Field(default_factory=list)
+    supporting_documents: list[SupportingDocument] = Field(default_factory=list)
+    document_audits: list[DocumentAudit] = Field(default_factory=list)
     main_schengen_destination: Optional[str] = Field(
         None, description="Country where applicant will spend the most nights"
     )
@@ -338,7 +382,7 @@ class VisaDocumentExtraction(BaseModel):
         # as an empty model so validation can flag it, without inventing any fields.
         return {} if value is None else value
 
-    @field_validator("identity_evidence","detected_documents","urgent_actions",mode="before")
+    @field_validator("identity_evidence","detected_documents","urgent_actions","evidence_locations","supporting_documents","document_audits",mode="before")
     @classmethod
     def absent_arrays(cls,value):
         return [] if value is None else value
@@ -422,6 +466,26 @@ names; flag script ambiguity for human verification when no official transcripti
 Create identity_evidence for EVERY applicant block in EVERY application/booking/page,
 including multiple flight reservations. Exclude companions; flag ambiguity in unreadable_fields.
 Include conflicting versions, never choose only a matching one. Use null for unreadable fields.
+Names may be the FULL passport name or FIRST given name plus FULL surname. Other partial
+formats need a formatting note; spelling errors and blank names are unresolved. Preserve
+passport given_names and surname separately so compound surnames are not shortened.
+The APPLICATION dates define the trip. Application/flight dates and the complete hotel
+window must match exactly. HR leave permits travel to start on its first day or the next
+day, and end on its last day or the previous day. Travel must never leave the HR window.
+
+SUPPORTING DOCUMENTS AND TRACEABLE EVIDENCE:
+Read EVERY supporting file and classify it from its actual content (bank statement, HR,
+national ID, employment, invitation, registry, tax, sponsor letter, or another actual type).
+Populate supporting_documents with its source filename, readable summary, individual claims,
+exact quotes/pages, and comparison to other SUPPLIED evidence. A claim can be consistent,
+conflicts, or unverified. NEVER call a document authentic or a fact externally verified.
+Unsupported claims, unreadable fields and missing reference evidence stay unverified.
+Populate document_audits for EVERY uploaded file, recording actual pages read, actual types,
+readability and specific uncertainties. Do not claim to read omitted or blank/unreadable pages.
+Populate evidence_locations for identity fields, travel/HR/insurance dates, hotel dates and
+other inconsistent facts. Use the exact original text, filename and 1-based page. Preserve
+the source spelling even when wrong. Include normalized value separately. Optional box
+coordinates must locate the real source field; never invent screenshots or corrected images.
 
 ACTIONABLE WRITING REVIEW:
 For cover_letter_text and travel_plan provide specific add/remove/replace/verify recommendations
@@ -431,6 +495,10 @@ Check vague purpose, template leftovers, contradictions, unsupported claims, dat
 document references, hotel/city alignment, plausible day-by-day routing and missing days.
 Populate travel_plan.days only from actual day-by-day entries in the supplied section. Never
 invent activities or expand a city/date range into made-up daily rows. No daily entries => [].
+Cover EVERY application travel day. For a missing/incomplete or impractical day, give a
+recommendation with day=the specific ISO date, explain the gap and propose a realistic
+structure. Activities not supported by the file must be clearly optional, for applicant
+confirmation; never present invented bookings, visits, opening hours or transport as facts.
 Do not stop at 'case is explained'. If a section is good, return [] instead of inventing faults.
 NEVER invent assets, family ties, salary, sponsorship, reservations, activities or intention
 to return. Missing facts require [placeholders] and verification. Never suggest concealing
@@ -492,7 +560,11 @@ def _extract_pdf_text(filename: str, file_bytes: bytes) -> str | None:
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         pages_text = [str(page.get_text()) for page in doc]
         doc.close()
-        combined = "\n".join(pages_text)
+        # A text page must never hide scanned pages in a mixed PDF: use vision for the
+        # complete original whenever any page lacks sufficient readable text.
+        if any(len(text.strip())<20 for text in pages_text):
+            return None
+        combined = "\n".join(f"[Page {index}]\n{text}" for index,text in enumerate(pages_text,1))
         if combined and len(combined.strip()) > 50:
             return combined
     except Exception:
@@ -721,166 +793,32 @@ def _assemble_content_parts(
 # Transient / Rate-Limit Error Detection Helpers
 # ---------------------------------------------------------------------------
 
-def _is_rate_limit_error(exc: Exception) -> bool:
-    """Return True if the exception indicates a 429 RESOURCE_EXHAUSTED error."""
-    msg = str(exc).lower()
-    return "429" in msg or "resource_exhausted" in msg or "quota" in msg or "rate limit" in msg
-
-
-def _is_transient_error(exc: Exception) -> bool:
-    """
-    Return True for any error that is transient and worth retrying:
-      - 429 RESOURCE_EXHAUSTED   (TPM / RPM quota spike — not daily quota)
-      - 503 Service Unavailable  (temporary server overload)
-      - Connection / timeout errors (network hiccup)
-    """
-    msg = str(exc).lower()
-    return (
-        "429" in msg
-        or "resource_exhausted" in msg
-        or "quota" in msg
-        or "rate limit" in msg
-        or "503" in msg
-        or "service unavailable" in msg
-        or "unavailable" in msg
-        or "connection" in msg
-        or "timeout" in msg
-        or "overloaded" in msg
-    )
-
-# ---------------------------------------------------------------------------
-# Gemini Call Helper — per-model exponential backoff + model fallback chain
-# ---------------------------------------------------------------------------
-
-# Number of retry attempts per model before moving to the next one.
-# Delays between retries: 5 s → 10 s → 20 s (exponential backoff).
-_MAX_RETRIES_PER_MODEL: int = 3
-_BACKOFF_BASE_SECONDS: float = 5.0
-
-
 def call_gemini_with_fallback(
     client: genai.Client,
     contents: list,
     log_fn=None,
     model_id: str | None = None,
     model_callback=None,
+    router=None,
+    validate=None,
 ) -> str:
-    """
-    Try each model in AVAILABLE_MODELS in priority order and return the
-    raw response text from the first successful call.
-
-    Error handling per model
-    ------------------------
-    404 NOT_FOUND
-        Model endpoint unavailable; skip immediately to the next model.
-        (No retries — 404 is a permanent failure for that endpoint.)
-
-    429 RESOURCE_EXHAUSTED / 503 Service Unavailable / transient network
-        Treated as a TEMPORARY spike, NOT a daily quota exhaustion.
-        → Retry the SAME model up to _MAX_RETRIES_PER_MODEL times with
-          exponential backoff: 5 s → 10 s → 20 s.
-        → Only after all retries on this model fail, move to the next model
-          in the fallback chain.
-        → This prevents prematurely abandoning a model due to a short TPM
-          burst that resolves within seconds.
-
-    Any other exception
-        Raised immediately — no silent swallowing.
-
-    Raises
-    ------
-    RuntimeError
-        If every model in the fallback chain exhausts all retry attempts.
-    """
-    def _log(msg: str):
-        if log_fn:
-            log_fn(msg)
-        logger.info(msg)
-
-    # Track which models were tried and why they failed, for the final error.
-    failure_summary: list[str] = []
-
-    if model_id and model_id not in AVAILABLE_MODELS:
+    """Route automatically through the approved free-model catalog."""
+    if model_id not in (None,"auto",*AVAILABLE_MODELS):
         raise ValueError("Unsupported model")
-    models = ([model_id] if model_id else []) + [m for m in AVAILABLE_MODELS if m != model_id]
-    for model_name in models:
-        last_exc: Exception | None = None
-
-        for attempt in range(1, _MAX_RETRIES_PER_MODEL + 1):
-            try:
-                _log(
-                    f"🔄 Calling '{model_name}' "
-                    f"(attempt {attempt}/{_MAX_RETRIES_PER_MODEL}) "
-                    f"with {len(contents)} content part(s)…"
-                )
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=MG_SYSTEM_INSTRUCTION,
-                        temperature=0.0,        # Deterministic extraction
-                        max_output_tokens=16384,
-                        response_mime_type="application/json",
-                    ),
-                )
-                _log(f"✅ Success with model '{model_name}' on attempt {attempt}.")
-                if model_callback:
-                    model_callback(model_name)
-                return (response.text or "").strip()
-
-            except Exception as exc:
-                err_str = str(exc)
-                last_exc = exc
-
-                # ── 404: permanent failure for this model endpoint ──────────
-                if "404" in err_str or "NOT_FOUND" in err_str:
-                    _log(
-                        f"❌ 404 NOT_FOUND for '{model_name}' — "
-                        f"endpoint unavailable. Skipping to next model."
-                    )
-                    failure_summary.append(f"{model_name}: 404 NOT_FOUND (skipped)")
-                    break  # exit retry loop, try next model
-
-                # ── Transient (429 / 503 / network) — exponential backoff ───
-                if _is_transient_error(exc):
-                    wait_secs = _BACKOFF_BASE_SECONDS * (2 ** (attempt - 1))  # 5, 10, 20
-                    if attempt < _MAX_RETRIES_PER_MODEL:
-                        _log(
-                            f"⚠️ Transient error on '{model_name}' (attempt {attempt}): "
-                            f"{err_str[:120]}. "
-                            f"Retrying in {wait_secs:.0f}s…"
-                        )
-                        time.sleep(wait_secs)
-                        continue  # retry same model
-                    else:
-                        _log(
-                            f"⚠️ '{model_name}' exhausted all {_MAX_RETRIES_PER_MODEL} "
-                            f"retry attempts (last: transient error). Moving to next model."
-                        )
-                        failure_summary.append(
-                            f"{model_name}: transient error after "
-                            f"{_MAX_RETRIES_PER_MODEL} retries ({err_str[:80]})"
-                        )
-                        break  # exit retry loop, try next model
-
-                # ── Any other error: hard failure — raise immediately ────────
-                raise exc
-
-    # All models in the chain have been tried and all retries exhausted.
-    summary_text = "\n  • ".join(failure_summary) if failure_summary else "(no details available)"
-    raise RuntimeError(
-        f"All Gemini models failed after retrying.\n"
-        f"Models tried: {AVAILABLE_MODELS}\n"
-        f"Failure details:\n  • {summary_text}\n\n"
-        "This is likely a temporary rate-limit or server overload — "
-        "please wait a minute and try again. "
-        "If the problem persists, check your API key and daily quota."
-    )
+    return generate_automatically(client,contents,types.GenerateContentConfig(
+        system_instruction=MG_SYSTEM_INSTRUCTION,temperature=0.0,
+        max_output_tokens=32768,response_mime_type="application/json"),
+        router=router,validate=validate,log_fn=log_fn,model_callback=model_callback)
 
 
 # ---------------------------------------------------------------------------
 # Main Extraction Function
 # ---------------------------------------------------------------------------
+
+def _parse_response(raw_text):
+    clean=re.sub(r"^```(?:json)?\s*|\s*```$","",raw_text.strip())
+    return VisaDocumentExtraction.model_validate(json.loads(clean))
+
 
 def extract_documents(
     api_key: str,
@@ -889,12 +827,13 @@ def extract_documents(
     max_retries: int = 2,
     status_callback=None,
     lang: str = "en",
+    router=None,
 ) -> VisaDocumentExtraction:
     """
     Send all uploaded documents to Gemini in a single multimodal call
     and return a parsed VisaDocumentExtraction object.
 
-    The selected model is tried first, followed by the configured fallback chain.
+    The highest-priority available free model is selected automatically.
     Uploaded File API objects are deleted in a finally block.
 
     Parameters
@@ -904,7 +843,7 @@ def extract_documents(
     uploaded_files : dict[str, list[tuple[str, bytes]]]
         Mapping of category_key -> [(filename, bytes), ...].
     model_id : str
-        Preferred model from the configured allowlist; fallbacks follow on failure.
+        Legacy argument; routing priority is controlled by the super administrator.
     max_retries : int
         Unused — retry semantics now live inside call_gemini_with_fallback().
     status_callback : callable | None
@@ -923,7 +862,7 @@ def extract_documents(
         If every model in the fallback chain fails.
     """
     if not api_key:
-        raise ValueError("Gemini API key is required. Please enter it in the sidebar.")
+        raise ValueError("Gemini API key is required on the server.")
 
     if not uploaded_files:
         raise ValueError("No documents were uploaded. Please upload at least one document.")
@@ -983,26 +922,12 @@ def extract_documents(
         # ------------------------------------------------------------------
         used_models = []
         raw_text = call_gemini_with_fallback(client, content_parts, log_fn=_log,
-                                             model_id=model_id, model_callback=used_models.append)
+                                             model_id=model_id, model_callback=used_models.append,router=router,validate=_parse_response)
 
         # ------------------------------------------------------------------
         # Parse JSON response → Pydantic model
         # ------------------------------------------------------------------
-        # Robustly strip any markdown fences Gemini might add around JSON
-        clean = raw_text.strip()
-        if clean.startswith("```json"):
-            clean = clean[7:]
-        elif clean.startswith("```"):
-            clean = clean[3:]
-        if clean.endswith("```"):
-            clean = clean[:-3]
-        clean = clean.strip()
-        # Also strip via regex in case of inline fences
-        clean = re.sub(r"^```(?:json)?\s*", "", clean)
-        clean = re.sub(r"\s*```$", "", clean)
-
-        data = json.loads(clean)  # Raises JSONDecodeError with precise error message if invalid
-        result = VisaDocumentExtraction.model_validate(data)
+        result = _parse_response(raw_text)
         result.model_used = used_models[0]
         return result
 

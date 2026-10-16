@@ -63,6 +63,8 @@ def direction_css(lang):
         .stMain {direction:rtl; text-align:right;}
         .stApp,.stApp input,.stApp textarea,.stApp button,.stApp h1,.stApp h2,.stApp h3,.stApp [data-testid="stMarkdownContainer"] {font-family:'IBM Plex Sans Arabic',sans-serif; letter-spacing:0 !important;}
         [data-testid="stHorizontalBlock"] {direction:rtl; flex-direction:row;}
+        [class*="st-key-evidence_"] [data-testid="stHorizontalBlock"] {direction:ltr;}
+        [class*="st-key-evidence_"] [data-testid="stColumn"] {direction:rtl;}
         .stepper {direction:rtl;}
         .stMain h1,.stMain h2,.stMain h3 {text-align:right; letter-spacing:0 !important;}
         [data-testid="stDataFrame"] {direction:rtl;}

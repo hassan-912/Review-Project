@@ -1,6 +1,6 @@
 """Exact identity comparisons. Missing/ambiguous evidence can never be a clean match."""
 import re
-from validator import ValidationIssue, Severity, _names_match, _parse_date
+from validator import ValidationIssue, Severity, _names_match, _parse_date, name_issue, _name_parts
 
 
 def strict_identity_checks(data, existing=()):
@@ -9,7 +9,7 @@ def strict_identity_checks(data, existing=()):
               "insurance":"Travel Insurance", "cover_letter":"Cover Letter", "travel_plan":"Travel Itinerary",
               "national_id":"National ID", "passport":"Passport", "supporting":"Supporting Documents", "employment":"Employment Documents"}
     refs = {"full_name":data.passport.full_name, "given_names":data.passport.given_names,
-            "surname":data.passport.surname, "passport_number":data.passport.passport_number,
+            "surname":data.passport.surname, "passport_number":data.passport.passport_number,"date_of_birth":data.passport.date_of_birth,
             "passport_issue":data.passport.passport_issue, "passport_expiry":data.passport.passport_expiry,
             "national_id_number":data.national_id.id_number, "national_id_issue":data.national_id.issue_date,
             "national_id_expiry":data.national_id.expiry_date}
@@ -38,9 +38,16 @@ def strict_identity_checks(data, existing=()):
             # Different scripts cannot be resolved by speculative transliteration.
             if bool(re.search(r"[\u0600-\u06ff]",found)) != bool(re.search(r"[\u0600-\u06ff]",ref)):
                 flag(doc,field,found,ref,"unreadable")
-            elif not _names_match(ref,found):
+            elif field=="full_name":
+                issue=name_issue(data.passport,found,doc)
+                if issue:
+                    issue.field_name="full_name"
+                    issues.append(issue)
+            elif field=="given_names" and _name_parts(found)==_name_parts(ref)[:1]:
+                pass
+            elif not _names_match(ref,found,allow_short=False):
                 flag(doc,field,found,ref)
-        elif field.endswith(("issue", "expiry")):
+        elif field.endswith(("issue", "expiry")) or field=="date_of_birth":
             a,b = _parse_date(ref),_parse_date(found)
             if not a or not b:
                 flag(doc,field,found,ref,"unreadable")
@@ -59,6 +66,8 @@ def strict_identity_checks(data, existing=()):
             check(doc,"passport_number",obj.passport_number)
     if data.national_id.present:
         check("National ID","full_name",data.national_id.full_name)
+        if not (data.national_id.full_name or "").strip():
+            flag("National ID","full_name",None,refs["full_name"],"unreadable")
         if not data.national_id.id_number:
             flag("National ID","national_id_number",None,None,"unreadable")
     for row in data.identity_evidence:
@@ -67,7 +76,7 @@ def strict_identity_checks(data, existing=()):
             flag(doc,field,None,refs.get(field),"unreadable")
         for field in refs:
             check(doc,field,getattr(row,field,None))
-        if row.document in ("visa_form","hotel","flight") and not row.full_name and not (row.given_names and row.surname):
+        if row.document in ("visa_form","hotel","flight") and not (row.full_name or "").strip() and not (row.given_names and row.surname):
             flag(doc,"full_name",None,refs["full_name"],"unreadable")
     # Missing authoritative mandatory fields are critical when document detection confirms
     # the document exists. No national-ID expiry requirement if it isn't printed.

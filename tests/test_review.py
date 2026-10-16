@@ -76,12 +76,13 @@ def test_identity_mismatches_keep_severity(complete_extraction,field):
     assert any(i.field_name==field and i.severity==(Severity.HIGH if field=="date_of_birth" else Severity.CRITICAL) for i in run_validation(complete_extraction))
 
 
-def test_scoring_deductions_and_caps_unchanged(complete_extraction):
+def test_critical_findings_gate_readiness_and_disable_bonuses(complete_extraction):
     complete_extraction.visa_form.passport_number="WRONG"
     issue=run_validation(complete_extraction)[0]
-    assert calculate_score([issue]).score==65
+    assert calculate_score([issue]).score==64
     assert calculate_score([issue]*3).score==0
-    assert calculate_score([issue],True,True).score==73
+    result=calculate_score([issue],True,True)
+    assert result.score==64 and result.readiness=='not_ready' and not result.bonus_detail
 
 
 def test_every_finding_has_bilingual_messages():
@@ -118,12 +119,12 @@ def test_prompt_preserves_deterministic_evidence_language():
     assert "untrusted evidence" in prompt and "EVERY accommodation" in prompt
 
 
-def test_model_selector_is_honoured():
+def test_model_priority_is_automatic_even_with_legacy_preference():
     client=Mock(); client.models.generate_content.return_value.text='{}'
     used=[]
     call_gemini_with_fallback(client,[],model_id=AVAILABLE_MODELS[-1],model_callback=used.append)
-    assert client.models.generate_content.call_args.kwargs['model']==AVAILABLE_MODELS[-1]
-    assert used==[AVAILABLE_MODELS[-1]]
+    assert client.models.generate_content.call_args.kwargs['model']==AVAILABLE_MODELS[0]
+    assert used==[AVAILABLE_MODELS[0]]
 
 
 def test_partial_parallel_upload_failure_deletes_successful_uploads(monkeypatch):

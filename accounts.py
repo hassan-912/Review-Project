@@ -60,7 +60,7 @@ class Actor:
     username: str = ""
 
 
-def verified_actor(client, session, require_admin=False, require_approved=True):
+def verified_actor(client, session, require_admin=False, require_approved=True, require_super=False):
     """Verify the token against Auth, then read live authorisation from profiles."""
     if session is None:
         raise AccountError("session_expired")
@@ -76,7 +76,8 @@ def verified_actor(client, session, require_admin=False, require_approved=True):
         raise AccountError("auth_unavailable") from exc
     profile = rows[0] if rows else {}
     actor = Actor(user.id, user.email or "", profile.get("is_approved") is True, profile.get("role", "user"), profile.get("username") or "")
-    if require_approved and not actor.approved or require_admin and actor.role != "admin":
+    if (require_approved and not actor.approved or require_admin and (not actor.approved or actor.role not in ("admin","super_admin"))
+            or require_super and (not actor.approved or actor.role != "super_admin")):
         raise AccountError("access_revoked")
     return actor
 
@@ -136,16 +137,14 @@ def set_approval(client, session, target_id: str, approved: bool):
     if target_id == actor.user_id:
         raise AccountError("access_update_failed")
     try:
-        result = admin_client().table("profiles").update({"is_approved": approved}).eq("id", target_id).execute()
-        if not result.data:
-            raise AccountError("access_update_failed")
+        admin_client().rpc("set_team_approval", {"p_actor":actor.user_id,"p_target":target_id,"p_approved":approved}).execute()
     except Exception as exc:
         raise AccountError("access_update_failed") from exc
 
 
 def team_profiles(client, session):
     verified_actor(client, session, require_admin=True)
-    return admin_client().table("profiles").select("id,email,username,is_approved,role").order("username").limit(1000).execute().data or []
+    return admin_client().table("profiles").select("id,email,username,is_approved,role,hourly_limit,daily_limit").order("username").limit(1000).execute().data or []
 
 
 def review_logs(client, session, team=False):
@@ -175,3 +174,42 @@ def finish_attempt(client, session, request_id, score=None):
 def team_attempts(client, session):
     verified_actor(client, session, require_admin=True)
     return admin_client().table("review_attempts").select("client_name,submitted_username,submitted_by,score,requested_at,status").order("requested_at",desc=True).limit(1000).execute().data or []
+
+
+def super_update(client, session, target_id, role, approved, hourly, daily):
+    actor=verified_actor(client,session,require_super=True)
+    if role not in ("user","admin","super_admin") or not 1<=hourly<=100 or not 1<=daily<=1000:
+        raise AccountError("access_update_failed")
+    try:
+        admin_client().rpc("super_admin_update",{"p_actor":actor.user_id,"p_target":str(uuid.UUID(target_id)),
+            "p_role":role,"p_approved":bool(approved),"p_hourly":hourly,"p_daily":daily}).execute()
+    except Exception as exc:
+        raise AccountError("access_update_failed") from exc
+
+
+def model_router(client,session):
+    from model_routing import ModelRouter
+    actor=verified_actor(client,session)
+    return ModelRouter(admin_client(),actor.user_id)
+
+
+def model_dashboard(client,session):
+    actor=verified_actor(client,session,require_super=True)
+    return admin_client().rpc("model_usage_overview",{"p_actor":actor.user_id}).execute().data
+
+
+def configure_model(client,session,model,enabled,priority,rpm,tpm,rpd):
+    from model_routing import FREE_MODELS
+    actor=verified_actor(client,session,require_super=True)
+    if model not in FREE_MODELS:
+        raise AccountError("access_update_failed")
+    try:
+        admin_client().rpc("configure_free_model",{"p_actor":actor.user_id,"p_model":model,"p_enabled":enabled,
+            "p_priority":priority,"p_rpm":rpm,"p_tpm":tpm,"p_rpd":rpd}).execute()
+    except Exception as exc:
+        raise AccountError("access_update_failed") from exc
+
+
+def set_reviews_enabled(client,session,enabled):
+    actor=verified_actor(client,session,require_super=True)
+    admin_client().rpc("set_reviews_enabled",{"p_actor":actor.user_id,"p_enabled":bool(enabled)}).execute()

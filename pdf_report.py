@@ -18,7 +18,7 @@ def _plain(text):
 
 
 def _ltr(text):
-    return "\u2066" + str(text) + "\u2069"
+    return str(text)
 
 
 def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en", client_name="", writing=None) -> bytes:
@@ -35,23 +35,38 @@ def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en
     alignment = "R" if lang == "ar" else "L"
 
     def row(text, size=10, bold=False, color=(11,31,58)):
+        text=_plain(text)
+        # Keep ISO dates in their original order within Arabic sentences.
+        if lang=='ar':
+            text=re.sub(r'\b\d{4}-\d{2}-\d{2}\b',lambda m:'\u200e'+m.group()+'\u200e',text)
+        pdf.set_text_shaping(True,direction='rtl' if re.search(r'[\u0600-\u06ff]',text) else 'ltr')
         pdf.set_font(primary, "B" if bold else "", size)
         pdf.set_text_color(*color)
-        pdf.multi_cell(0, 7 if size < 14 else 10, _plain(text), align=alignment,
+        pdf.multi_cell(0, 7 if size < 14 else 10, text, align=alignment,
                        new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+    def field_row(label,value,size=10):
+        if lang=='ar':
+            # Separate Arabic labels from Latin values: the pinned fallback-font shaper
+            # can otherwise drop labels and reorder numeric dates in mixed lines.
+            row(label,size,True)
+            row(value,size)
+        else:
+            row(f'{label}: {value}',size)
 
     row(t("pdf_title", lang), 20, True, (0,103,218))
     row(t("pdf_subtitle", lang), color=(80,96,122))
     pdf.ln(4)
     row(f'{t("score_title", lang)}: {score_result.score:.0f}% · {t(score_badge(score_result.score), lang)}', 14, True)
+    row(t(score_result.readiness,lang),11,True)
     row(t("score_note", lang), 9, color=(80,96,122))
     pdf.ln(4)
     row(t("applicant_info", lang), 13, True)
-    row(f'{t("client_name", lang)}: {client_name or extraction.passport.full_name or extraction.visa_form.applicant_name or t("unknown", lang)}')
-    row(f'{t("field_passport_number", lang)}: {_ltr(extraction.passport.passport_number or t("unknown", lang))}')
-    row(f'{t("country", lang)}: {extraction.main_schengen_destination or t("unknown", lang)}')
-    row(f'{t("field_departure_date", lang)}: {_ltr(extraction.flight.departure_date or t("unknown", lang))}')
-    row(f'{t("field_return_date", lang)}: {_ltr(extraction.flight.return_date or t("unknown", lang))}')
+    field_row(t("client_name",lang),client_name or extraction.passport.full_name or extraction.visa_form.applicant_name or t("unknown",lang))
+    field_row(t("field_passport_number",lang),extraction.passport.passport_number or t("unknown",lang))
+    field_row(t("country",lang),extraction.main_schengen_destination or t("unknown",lang))
+    field_row(t("field_departure_date",lang),extraction.visa_form.intended_arrival or extraction.flight.departure_date or t("unknown",lang))
+    field_row(t("field_return_date",lang),extraction.visa_form.intended_departure or extraction.flight.return_date or t("unknown",lang))
     pdf.ln(4)
     if extraction.executive_summary:
         row(t("summary", lang), 13, True)
@@ -64,10 +79,14 @@ def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en
     for issue in sorted(issues, key=lambda x: order[x.severity.value]):
         title, fix = issue_text(issue, lang)
         pdf.ln(3)
-        row(f'[{t(issue.severity.value.lower(), lang)}] {document_label(issue.document_name, lang)} · {title}', 11, True)
+        label=issue.document_name.split(' (')[0] if lang=='ar' else issue.document_name
+        row(f'[{t(issue.severity.value.lower(), lang)}] {document_label(label, lang)} · {title}', 11, True)
         if issue.found_value:
-            row(f'{t("found", lang)}: {issue.found_value}', 9)
-        row(f'{t("fix", lang)}: {fix}', 10)
+            field_row(t("found",lang),issue.found_value,9)
+        field_row(t("expected",lang),issue.expected_value,9)
+        field_row(t("fix",lang),fix,10)
+        for location in issue.evidence:
+            field_row(t("source",lang),location["source_file"]+" · "+str(location["page"]),9)
     from writing_review import writing_recommendations
     writing = writing if writing is not None else writing_recommendations(extraction,lang)
     pdf.ln(4)
@@ -79,12 +98,13 @@ def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en
             row(t("writing_ok",lang))
         for edit in edits:
             row(t("edit_"+edit.action,lang)+": "+edit.reason)
+            if edit.day: field_row(t("day",lang),edit.day,9)
             if edit.source_file:
-                row(t("source",lang)+": "+edit.source_file+(f" · {edit.page}" if edit.page else ""),9)
+                field_row(t("source",lang),edit.source_file+(f" · {edit.page}" if edit.page else ""),9)
             if edit.original_text:
-                row(t("original_text",lang)+": "+edit.original_text,9)
+                field_row(t("original_text",lang),edit.original_text,9)
             if edit.replacement:
-                row(t("replacement",lang)+": "+edit.replacement)
+                field_row(t("replacement",lang),edit.replacement)
     pdf.ln(6)
     row(t("score_note", lang), 8, color=(80,96,122))
     return bytes(pdf.output())

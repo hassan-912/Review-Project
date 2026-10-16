@@ -15,7 +15,7 @@ Changes in this version
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from calendar import monthrange
 from enum import Enum
 from typing import Optional
@@ -23,7 +23,7 @@ from collections import Counter
 import re
 import unicodedata
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator, Field
 
 from extractor import VisaDocumentExtraction
 
@@ -33,7 +33,7 @@ from extractor import VisaDocumentExtraction
 # ---------------------------------------------------------------------------
 
 class Severity(str, Enum):
-    CRITICAL = "CRITICAL"   # Likely rejection
+    CRITICAL = "CRITICAL"   # Unresolved blocking correction
     HIGH     = "HIGH"       # Strong negative signal
     MEDIUM   = "MEDIUM"     # Notable concern
     LOW      = "LOW"        # Minor issue / advisory
@@ -55,6 +55,8 @@ class ValidationIssue(BaseModel):
     title_en: str = ""
     title_ar: str = ""
     fix_ar: str = ""
+    evidence: list[dict] = Field(default_factory=list)
+    reference_evidence: list[dict] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def localized_messages(self):
@@ -105,16 +107,42 @@ def _tokens(text: Optional[str]) -> set[str]:
 # Individual Rule Checks
 # ---------------------------------------------------------------------------
 
-def _names_match(name_a: Optional[str], name_b: Optional[str]) -> bool:
-    """Exact name tokens, ignoring only typography and ordering; no fuzzy subsets."""
+def _name_parts(value):
+    value = unicodedata.normalize("NFC", value or "").upper()
+    return re.sub(r"[<,\-/]+", " ", value).split()
+
+
+def _names_match(name_a: Optional[str], name_b: Optional[str], given_names=None, surname=None, allow_short=True) -> bool:
+    """Only full passport name or first given name plus full surname; exact spelling."""
     if not name_a or not name_b:
         return False
-    def parts(value):
-        # Only typography and order are ignored. Never remove accents, expand initials,
-        # use token subsets, or autocorrect a character. Counter preserves duplicates.
-        value = unicodedata.normalize("NFC", value).upper()
-        return Counter(re.sub(r"[<,\-/]+", " ", value).split())
-    return parts(name_a) == parts(name_b)
+    reference,found=_name_parts(name_a),_name_parts(name_b)
+    if not reference or not found:
+        return False
+    if Counter(reference)==Counter(found):
+        return True
+    if not allow_short or len(reference)<2:
+        return False
+    if given_names and surname:
+        short=_name_parts(given_names)[:1]+_name_parts(surname)
+    elif "<<" in name_a:
+        family,given=name_a.split("<<",1)
+        short=_name_parts(given)[:1]+_name_parts(family)
+    else:
+        short=[reference[0],reference[-1]]
+    return len(short)>=2 and Counter(found)==Counter(short)
+
+
+def name_issue(passport, found, document):
+    """Known partial-name formats get a note; wrong spellings and blanks are critical."""
+    reference=passport.full_name
+    if reference and found and _names_match(reference,found,passport.given_names,passport.surname):
+        return None
+    partial=bool(_name_parts(reference) and _name_parts(found) and not (Counter(_name_parts(found))-Counter(_name_parts(reference))))
+    return ValidationIssue(document_name=document,field_name="applicant_name",found_value=found,
+        expected_value=reference or "Readable passport name",severity=Severity.LOW if partial else Severity.CRITICAL,
+        message_key="identity.name_format" if partial else "identity.unreadable" if not found or not reference else "identity.mismatch",
+        recommended_fix="Use either the full passport name or the first given name and full surname, with exact passport spelling. Blank names are not accepted.")
 
 
 def accommodation_window(data):
@@ -171,62 +199,15 @@ def _check_passport_number_crosscheck(data: VisaDocumentExtraction) -> list[Vali
 
 
 def _check_identity_name_crosscheck(data: VisaDocumentExtraction) -> list[ValidationIssue]:
-    """
-    Rule 2 — Applicant Full Name Cross-Check (CRITICAL for wrong passport).
-
-    Compares the full name on the PASSPORT IMAGE against:
-      - The Visa Application Form (applicant_name)
-      - Employment docs (employer_name is not the same; skip)
-
-    A mismatch here indicates the wrong passport was attached, which is a
-    CRITICAL rejection reason.
-    """
-    issues: list[ValidationIssue] = []
-    passport_name = data.passport.full_name
-
-    if not passport_name:
-        return issues  # Cannot flag without a reference
-
-    visa_form_name = data.visa_form.applicant_name if data.visa_form else None
-
-    if visa_form_name and not _names_match(passport_name, visa_form_name):
-        issues.append(ValidationIssue(message_key='validation.03',
-            document_name="Visa Application Form",
-            field_name="applicant_name",
-            found_value=visa_form_name,
-            expected_value=passport_name,
-            severity=Severity.CRITICAL,
-            recommended_fix=(
-                f"Name mismatch: passport '{passport_name}', application '{visa_form_name}'. "
-                "Verify the applicant and correct the application to the passport spelling. "
-                "Do not submit until every given name and surname has been checked."
-            ),
-        ))
-
-    # Cross-check against booking names (HIGH severity — name order / typo issues)
-    booking_candidates = {
-        "Flight Reservation": data.flight.passenger_name,
-        "Travel Insurance":   data.insurance.insured_name,
-    }
-    booking_candidates.update({f"Hotel Reservation ({idx + 1})": h.guest_name
-                               for idx, h in enumerate(data.hotel)})
-    for doc_name, found_name in booking_candidates.items():
-        if not found_name:
-            continue
-        if not _names_match(passport_name, found_name):
-            issues.append(ValidationIssue(message_key='validation.04',
-                document_name=doc_name,
-                field_name="applicant_name",
-                found_value=found_name,
-                expected_value=passport_name,
-                severity=Severity.CRITICAL,
-                recommended_fix=(
-                    f"Name '{found_name}' in {doc_name} does not clearly match "
-                    f"passport name '{passport_name}'. "
-                    "Ensure all bookings use the exact name as printed on the passport."
-                ),
-            ))
-    return issues
+    candidates=[]
+    if data.visa_form.applicant_name or data.visa_form.passport_number or "visa_form" in data.detected_documents:
+        candidates.append(("Visa Application Form",data.visa_form.applicant_name))
+    if data.flight.passenger_name or data.flight.departure_date or "flight" in data.detected_documents:
+        candidates.append(("Flight Reservation",data.flight.passenger_name))
+    if data.insurance.insured_name or data.insurance.valid_from or data.insurance.coverage_amount_eur is not None:
+        candidates.append(("Travel Insurance",data.insurance.insured_name))
+    candidates.extend((f"Hotel Reservation ({idx+1})",h.guest_name) for idx,h in enumerate(data.hotel))
+    return [issue for document,name in candidates if (issue:=name_issue(data.passport,name,document))]
 
 
 def _check_dob_crosscheck(data: VisaDocumentExtraction) -> list[ValidationIssue]:
@@ -259,103 +240,78 @@ def _check_dob_crosscheck(data: VisaDocumentExtraction) -> list[ValidationIssue]
     return issues
 
 
+def application_window(data):
+    """The application is authoritative; flight fallback is explicitly incomplete evidence."""
+    return (_parse_date(data.visa_form.intended_arrival) or _parse_date(data.flight.departure_date),
+            _parse_date(data.visa_form.intended_departure) or _parse_date(data.flight.return_date))
+
+
 def _check_date_alignment(data: VisaDocumentExtraction) -> list[ValidationIssue]:
-    """
-    Complete Date Alignment Matrix — cross-checks all 5 key travel dates.
-
-    Departure cluster (must all be consistent with flight departure):
-      Flight dep ≤ Hotel first check-in ≤ Insurance start ≤ Visa Form entry
-
-    Return cluster (must all be consistent with flight return):
-      Flight return ≥ Hotel last check-out ≥ Insurance end ≥ Visa Form exit
-    """
-    issues: list[ValidationIssue] = []
-
-    flight_dep  = _parse_date(data.flight.departure_date)
-    flight_ret  = _parse_date(data.flight.return_date)
-    hotel_in, hotel_out = accommodation_window(data)
-    ins_start   = _parse_date(data.insurance.valid_from)
-    ins_end     = _parse_date(data.insurance.valid_until)
-    visa_entry  = _parse_date(getattr(data.visa_form, "intended_arrival", None))
-    visa_exit   = _parse_date(getattr(data.visa_form, "intended_departure", None))
-
-    def _flag(doc: str, field: str, found: str, expected: str, fix: str,
-               sev: Severity = Severity.HIGH) -> None:
-        issues.append(ValidationIssue(message_key="date." + field,
-            document_name=doc, field_name=field,
-            found_value=found, expected_value=expected,
-            severity=sev, recommended_fix=fix,
-        ))
-
-    # ── Departure cluster ───────────────────────────────────────────────────────────────
-    if flight_dep and hotel_in and flight_dep > hotel_in:
-        _flag("Flight / Hotel", "departure_date vs check_in_date",
-              f"Flight dep: {data.flight.departure_date}, Hotel in: {hotel_in}",
-              "Flight departure ≤ Hotel check-in",
-              "Flight departs AFTER hotel check-in. Align the outbound flight to arrive before check-in.")
-
-    if flight_dep and ins_start and ins_start > flight_dep:
-        _flag("Travel Insurance", "valid_from vs departure_date",
-              f"Insurance starts: {data.insurance.valid_from}, Flight dep: {data.flight.departure_date}",
-              "Insurance start ≤ Flight departure",
-              "Insurance must be valid from the departure date. Obtain a revised policy.",
-              Severity.CRITICAL)
-
-    if flight_dep and visa_entry:
-        if abs((flight_dep - visa_entry).days) > 3:
-            _flag("Visa Application Form / Flight", "intended_arrival vs departure_date",
-                  f"Visa form entry: {data.visa_form.intended_arrival}, Flight dep: {data.flight.departure_date}",
-                  "Visa entry date within 3 days of flight departure",
-                  "The intended entry date on the Visa Form differs significantly from the flight departure. "
-                  "Update the Visa Form to reflect the actual travel dates.")
-
-    # ── Return cluster ────────────────────────────────────────────────────────────────
-    if flight_ret and hotel_out and flight_ret < hotel_out:
-        _flag("Flight / Hotel", "return_date vs check_out_date",
-              f"Flight ret: {data.flight.return_date}, Hotel out: {hotel_out}",
-              "Flight return ≥ Hotel check-out",
-              "Return flight is before hotel check-out. Update either the flight or hotel dates.")
-
-    if flight_ret and ins_end and ins_end < flight_ret:
-        _flag("Travel Insurance", "valid_until vs return_date",
-              f"Insurance ends: {data.insurance.valid_until}, Flight ret: {data.flight.return_date}",
-              "Insurance end ≥ Flight return",
-              "Insurance expires before the return flight. Extend the policy to cover the full trip.",
-              Severity.CRITICAL)
-
-    if flight_ret and visa_exit:
-        if abs((flight_ret - visa_exit).days) > 3:
-            _flag("Visa Application Form / Flight", "intended_departure vs return_date",
-                  f"Visa form exit: {data.visa_form.intended_departure}, Flight ret: {data.flight.return_date}",
-                  "Visa exit date within 3 days of flight return",
-                  "The intended departure date on the Visa Form differs significantly from the return flight. "
-                  "Update the Visa Form to reflect the actual return date.")
-
-    # ── Departure before return ─────────────────────────────────────────────────────
-    if flight_dep and flight_ret and flight_dep >= flight_ret:
-        _flag("Flight Reservation", "departure_date / return_date",
-              f"Dep: {data.flight.departure_date}, Ret: {data.flight.return_date}",
-              "Departure must be before return",
-              "Departure date is on or after the return date. Verify the flight reservation.",
-              Severity.CRITICAL)
-
-    if flight_dep and flight_ret and flight_dep < flight_ret:
-        cursor = flight_dep
-        intervals = []
-        for index, hotel in enumerate(data.hotel):
-            start, end = _parse_date(hotel.check_in_date), _parse_date(hotel.check_out_date)
-            if start and end and start >= end:
-                _flag("Hotel Reservation", "hotel_date_order", f"{start} / {end}",
-                      "Check-in before check-out", "Correct the accommodation booking dates.")
-            elif start and end:
-                intervals.append((start, end))
-        for start, end in sorted(intervals):
-            if start > cursor:
+    issues=[]
+    start,end=application_window(data)
+    def flag(doc,field,found,expected,fix,critical=False):
+        issues.append(ValidationIssue(document_name=doc,field_name=field,found_value=found,
+            expected_value=expected,severity=Severity.CRITICAL if critical else Severity.HIGH,
+            recommended_fix=fix,message_key="dates.exact" if not critical else "dates.boundary"))
+    if start and end and start>=end:
+        flag("Visa Application Form","travel_date_order",f"{start} / {end}","Arrival before departure",
+             "Verify the application travel dates before aligning other documents.",True)
+        return issues
+    for field,value in (("intended_arrival",data.visa_form.intended_arrival),("intended_departure",data.visa_form.intended_departure)):
+        if not _parse_date(value):
+            flag("Visa Application Form",field,value,"A readable application travel date",
+                 "Read the original application and supply the exact travel dates.")
+    records=[("Flight Reservation",data.flight.departure_date,data.flight.return_date),
+             ("Cover Letter",data.cover_letter_text.start_date,data.cover_letter_text.end_date),
+             ("Travel Itinerary",data.travel_plan.start_date,data.travel_plan.end_date)]
+    for doc,raw_start,raw_end in records:
+        a,b=_parse_date(raw_start),_parse_date(raw_end)
+        for field,raw,actual,expected in (("departure_date",raw_start,a,start),("return_date",raw_end,b,end)):
+            if raw and not actual or actual and expected and actual!=expected:
+                flag(doc,field,raw,str(expected),"Match the application travel dates exactly; no three-day tolerance.")
+        if a and b and a>=b:
+            flag(doc,"departure_date / return_date",f"{a} / {b}","Departure before return",
+                 "Correct reversed or identical travel dates.",True)
+    if start and end:
+        a,b=accommodation_window(data)
+        if a and a!=start:
+            flag("Hotel Reservation","check_in_date",str(a),str(start),"First check-in must match application arrival.")
+        if b and b!=end:
+            flag("Hotel Reservation","check_out_date",str(b),str(end),"Last check-out must match application departure.")
+        cursor=start
+        intervals=[]
+        for hotel in data.hotel:
+            a,b=_parse_date(hotel.check_in_date),_parse_date(hotel.check_out_date)
+            if a and b and a>=b:
+                flag("Hotel Reservation","hotel_date_order",f"{a} / {b}","Check-in before check-out","Correct the booking dates.")
+            elif a and b:
+                intervals.append((a,b))
+            if a and a<start or b and b>end:
+                flag("Hotel Reservation","hotel_outside_trip",f"{a} / {b}",f"{start} / {end}",
+                     "Keep all accommodation dates inside the application's travel window.")
+        for a,b in sorted(intervals):
+            if a>cursor:
                 break
-            cursor = max(cursor, end)
-        if cursor < flight_ret:
-            _flag("Hotel Reservation", "hotel_coverage_gap", str(cursor), str(flight_ret),
-                  "Provide accommodation bookings covering every night from departure to return.")
+            cursor=max(cursor,b)
+        if cursor<end:
+            flag("Hotel Reservation","hotel_coverage_gap",str(cursor),str(end),
+                 "Provide bookings covering every night of the application's travel dates.")
+        ins_start,ins_end=_parse_date(data.insurance.valid_from),_parse_date(data.insurance.valid_until)
+        if ins_start and ins_start>start:
+            flag("Travel Insurance","valid_from vs departure_date",str(ins_start),str(start),
+                 "Insurance must cover the application travel window from its first day.",True)
+        if ins_end and ins_end<end:
+            flag("Travel Insurance","valid_until vs return_date",str(ins_end),str(end),
+                 "Extend insurance through the application's final travel day.",True)
+        plan=data.travel_plan
+        if plan.present:
+            days={_parse_date(day.date) for day in plan.days}
+            days.discard(None)
+            expected_days=(end-start).days+1
+            inside={day for day in days if start<=day<=end}
+            if len(inside)!=expected_days or len(days)!=len(inside):
+                flag("Travel Itinerary","travel_plan_coverage",f"{len(inside)} / {expected_days}",f"{start} / {end}",
+                     "Include a dated plan for every application travel day, including arrival and departure. Remove days outside the application window.")
     return issues
 
 
@@ -501,70 +457,38 @@ def _check_passport_expiry(data: VisaDocumentExtraction) -> list[ValidationIssue
 
 
 def _check_employment_leave_dates(data: VisaDocumentExtraction) -> list[ValidationIssue]:
-    """
-    Rule: Approved leave period must completely cover the travel period
-    (flight departure → flight return).
-    If no employment documents were uploaded, skip silently.
-    """
-    issues: list[ValidationIssue] = []
-    emp = data.employment
-
-    # If no employment data at all, skip this check
+    issues=[]
+    emp=data.employment
     if not emp.employer_name and not emp.approved_leave_start and not emp.approved_leave_end:
         return issues
-
-    flight_dep = _parse_date(data.flight.departure_date)
-    flight_ret = _parse_date(data.flight.return_date)
-    leave_start = _parse_date(emp.approved_leave_start)
-    leave_end   = _parse_date(emp.approved_leave_end)
-
-    # Check that leave approval letter exists
-    if emp.leave_approval_confirmed is False:
-        issues.append(ValidationIssue(message_key='validation.14',
-            document_name="Employment Documents",
-            field_name="leave_approval_confirmed",
-            found_value="Not found",
-            expected_value="An explicit leave approval letter or stamp",
-            severity=Severity.MEDIUM,
-            recommended_fix=(
-                "No leave approval letter or HR confirmation stamp was detected. "
-                "Many consulates require formal leave approval from the employer. "
-                "Obtain a signed HR leave approval letter and include it in the package."
-            ),
-        ))
-
-    # Leave start must be on or before flight departure
-    if flight_dep and leave_start:
-        if leave_start > flight_dep:
-            issues.append(ValidationIssue(message_key='validation.15',
-                document_name="Employment Documents",
-                field_name="approved_leave_start vs flight departure",
-                found_value=f"Leave start: {emp.approved_leave_start}, Flight dep: {data.flight.departure_date}",
-                expected_value="Approved leave must start on or before the departure date",
-                severity=Severity.HIGH,
-                recommended_fix=(
-                    f"Leave approval starts ({emp.approved_leave_start}) AFTER the flight departure "
-                    f"({data.flight.departure_date}). The approved leave period must cover the entire trip. "
-                    "Request an updated leave letter from HR with the correct start date."
-                ),
-            ))
-
-    # Leave end must be on or after flight return
-    if flight_ret and leave_end:
-        if leave_end < flight_ret:
-            issues.append(ValidationIssue(message_key='validation.16',
-                document_name="Employment Documents",
-                field_name="approved_leave_end vs flight return",
-                found_value=f"Leave end: {emp.approved_leave_end}, Flight ret: {data.flight.return_date}",
-                expected_value="Approved leave must end on or after the return date",
-                severity=Severity.HIGH,
-                recommended_fix=(
-                    f"Leave approval ends ({emp.approved_leave_end}) BEFORE the flight return "
-                    f"({data.flight.return_date}). The approved leave must cover the full trip duration. "
-                    "Request an updated leave letter from HR covering the complete travel period."
-                ),
-            ))
-
+    a,b=_parse_date(emp.approved_leave_start),_parse_date(emp.approved_leave_end)
+    def flag(doc,field,found,expected,fix,critical=False):
+        issues.append(ValidationIssue(document_name=doc,field_name=field,found_value=found,
+            expected_value=expected,severity=Severity.CRITICAL if critical else Severity.HIGH,
+            recommended_fix=fix,message_key="hr.window"))
+    if emp.leave_approval_confirmed is not True:
+        flag("Employment Documents","leave_approval_confirmed",None,"Explicit HR leave approval",
+             "Obtain clear signed/stamped leave approval; missing approval is unresolved.")
+    if not a or not b or a>b:
+        flag("Employment Documents","approved_leave_dates",f"{emp.approved_leave_start} / {emp.approved_leave_end}",
+             "Readable, ordered approved leave dates","Verify the original HR letter.",True)
+        return issues
+    first,last=accommodation_window(data)
+    records=[("Visa Application Form",_parse_date(data.visa_form.intended_arrival),_parse_date(data.visa_form.intended_departure)),
+             ("Flight Reservation",_parse_date(data.flight.departure_date),_parse_date(data.flight.return_date)),
+             ("Hotel Reservation",first,last)]
+    for doc,start,end in records:
+        if start and not a<=start<=min(a+timedelta(days=1),b):
+            flag(doc,"approved_leave_start vs flight departure",str(start),f"{a} / {min(a+timedelta(days=1),b)}",
+                 "Travel must start on the HR leave start date or the following day, never before leave begins.",start<a or start>b)
+        if end and not max(a,b-timedelta(days=1))<=end<=b:
+            flag(doc,"approved_leave_end vs flight return",str(end),f"{max(a,b-timedelta(days=1))} / {b}",
+                 "Travel must end on the HR leave end date or the previous day, never after leave ends.",end>b or end<a)
+    for index,hotel in enumerate(data.hotel,1):
+        start,end=_parse_date(hotel.check_in_date),_parse_date(hotel.check_out_date)
+        if start and start<a or end and end>b:
+            flag(f"Hotel Reservation ({index})","hotel_outside_leave",f"{start} / {end}",f"{a} / {b}",
+                 "Every hotel booking must stay inside the approved HR leave period.",True)
     return issues
 
 
@@ -636,6 +560,7 @@ def _check_missing_fields(data: VisaDocumentExtraction) -> list[ValidationIssue]
         ("Flight Reservation", "return_date",          data.flight.return_date,                "Return flight date"),
         ("Travel Insurance",   "valid_from",           data.insurance.valid_from,              "Policy start date"),
         ("Travel Insurance",   "valid_until",          data.insurance.valid_until,             "Policy end date"),
+        ("Travel Itinerary",   "travel_plan_coverage", data.travel_plan.present,                "A dated travel plan covering the application dates"),
     ]
     if not data.hotel:
         critical_checks.append(("Hotel Reservation", "hotel", None, "Accommodation bookings"))
