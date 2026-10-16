@@ -151,6 +151,7 @@ def test_extraction_parse_failure_still_deletes_provider_files(monkeypatch):
     with pytest.raises(ValueError):extractor.extract_documents('fake',{'passport':[('a.pdf',b'xx')]})
     client.files.delete.assert_called_once_with(name='files/synthetic')
     client.close.assert_called_once()
+    assert extractor.genai.Client.call_args.kwargs['http_options'].retry_options.attempts==1
 
 
 def test_pipeline_in_both_languages(monkeypatch,complete_extraction):

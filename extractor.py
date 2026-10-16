@@ -883,6 +883,9 @@ def extract_documents(
         http_options=types.HttpOptions(
             timeout=GEMINI_TIMEOUT_MS,      # 300,000 ms = 5 min
             api_version="v1beta",
+            # The SDK defaults to five HTTP attempts. The router must own retries
+            # so each reserved inference corresponds to one actual request.
+            retry_options=types.HttpRetryOptions(attempts=1),
         ),
     )
 

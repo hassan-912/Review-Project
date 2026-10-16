@@ -206,6 +206,8 @@ on quota/unavailable/transient/invalid-output failures. CountTokens counts all p
 including system text, with a conservative 32-token protocol allowance for reservations;
 provider output usage includes reasoning tokens where reported. Provider 429s trigger
 cooldowns, and identifiable daily quota errors wait until the next Pacific midnight.
+The SDK's default five HTTP attempts are disabled so routing owns retries, usage
+reservations track individual inference requests, and unavailable models fail over promptly.
 
 Model usage events contain only model/user IDs, counters, timing and coarse status;
 no prompts, documents, keys or raw provider exceptions are retained. Events remain for
