@@ -1,5 +1,18 @@
 # MG Visa File Review — production release
 
+## ID reference notes and signup - 2026-10-17
+
+A national ID number extracted from a document without an independent readable ID-number
+reference stays visible as a manual-verification note. This specific note neither deducts
+points nor makes the score provisional. Confirmed mismatches, missing required fields and
+other unresolved identity checks retain their scoring behavior. The cache schema changes
+so future reviews do not reuse the previous deduction.
+
+Signup and password reset accept six or more characters with no character-mix rules.
+Supabase Auth enforces a hard minimum of six; four is unsupported. The production email
+provider minimum was reduced from eight to six after explicit user confirmation; the
+provider already had no required character classes. Existing credentials are preserved.
+
 ## Bank balance and upload workspace - 2026-10-16
 
 Flight and hotel holds are informational booking statuses, without a score deduction

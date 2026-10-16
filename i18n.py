@@ -87,8 +87,8 @@ _COPY = [
     ("new_password", "New password", "كلمة المرور الجديدة"),
     ("save_password", "Update password", "تحديث كلمة المرور"),
     ("password_changed", "Password updated. Sign in with your new password.", "تم تحديث كلمة المرور. سجّل الدخول بكلمة المرور الجديدة."),
-    ("password_mismatch", "Passwords must match and contain at least 8 characters.", "يجب أن تتطابق كلمتا المرور وأن تتكونا من 8 أحرف على الأقل."),
-    ("password_short", "Use at least 8 characters. Symbols are optional.", "استخدم 8 أحرف على الأقل. الرموز اختيارية."),
+    ("password_mismatch", "Passwords must match.", "يجب أن تتطابق كلمتا المرور."),
+    ("password_short", "Use at least 6 characters. No uppercase, digit or symbol rules. Supabase requires a minimum of 6.", "استخدم 6 أحرف على الأقل، دون اشتراط أحرف كبيرة أو أرقام أو رموز. يفرض Supabase حداً أدنى من 6 أحرف."),
     ("username", "Username", "اسم المستخدم"),
     ("username_hint", "3–32 letters, numbers, dots, hyphens or underscores; start with a letter or number. Usernames are case-insensitive.", "من 3 إلى 32 حرفاً لاتينياً أو رقماً، مع السماح بالنقطة والشرطة والشرطة السفلية. ابدأ بحرف أو رقم. لا يفرق الاسم بين الأحرف الكبيرة والصغيرة."),
     ("username_invalid", "Enter a valid username: 3–32 characters, starting with a letter or number.", "أدخل اسم مستخدم صحيحاً من 3 إلى 32 حرفاً يبدأ بحرف لاتيني أو رقم."),
@@ -360,6 +360,7 @@ def document_label(name: str, lang: str = "en") -> str:
 
 # Stable IDs belong to rule constructors; English fixes retain their original precise evidence.
 ISSUE_AR = {
+    "identity.id_reference_note": "تمت قراءة الرقم القومي، لكن لا يتوفر مرجع مستقل مقروء للتحقق منه. راجعه مع أصل البطاقة عند توفره. هذه ليست مخالفة مؤكدة ولا تُخصم بسببها نقاط.",
     "identity.mismatch": "بيان الهوية لا يطابق المستند المرجعي. تحقق من الأصل وصحح النموذج أو أعد إصدار الحجز ليطابق البيانات حرفياً. لا تخمن الحروف ولا تعدّل وثيقة هوية رسمية.",
     "identity.unreadable": "البيان غير مقروء أو ملتبس ويستلزم تحققاً يدوياً. أرفق أصلاً واضحاً أو نقلاً رسمياً قبل التقديم؛ لم يُحسم هذا البيان.",
     "identity.reference": "لا يوجد بيان مرجعي مقروء للتحقق من هذه القيمة. أرفق صفحة الهوية الأصلية بوضوح قبل التقديم؛ لم يُحسم هذا البيان.",

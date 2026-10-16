@@ -43,6 +43,31 @@ app.render_upload_thumbnails([('bank.pdf',bytes.fromhex('{raw}'))],'bank_stateme
     assert any('Page 2 of 2' in item.value for item in app.caption)
 
 
+@pytest.mark.parametrize('lang',['en','ar'])
+def test_non_scoring_id_reference_note_is_visible(complete_extraction,lang):
+    from extractor import IdentityEvidence
+    from validator import run_validation
+    from scorer import calculate_score
+    from business_checker import check_business_alignment
+    data=complete_extraction
+    data.identity_evidence=[IdentityEvidence(document='passport',source_file='passport.pdf',
+        national_id_number='30001011234567')]
+    issues=run_validation(data)
+    result={'extraction':data,'issues':issues,'score':calculate_score(issues),
+        'biz_result':check_business_alignment(data),'writing':{},'client_name':'Synthetic note test','hash':'id-note'}
+    ui=AppTest.from_string('''
+import app,streamlit as st
+app._init_session_state()
+app.render_report(st.session_state.test_result)
+''',default_timeout=30)
+    ui.session_state.lang=lang
+    ui.session_state.test_result=result
+    ui.run()
+    assert not ui.exception
+    assert any('30001011234567' in item.value for item in ui.info)
+    assert result['score'].score==100 and not result['score'].provisional
+
+
 @pytest.fixture(autouse=True)
 def no_browser_recovery_token(monkeypatch):
     # AppTest has no browser JS and replaces its component registry between app instances.
@@ -94,7 +119,7 @@ def test_failed_legacy_restore_clears_url_and_explains(monkeypatch):
 
 
 @pytest.mark.parametrize('lang',['en','ar'])
-def test_signup_has_username_and_accepts_eight_characters(monkeypatch,lang):
+def test_signup_has_username_and_accepts_six_characters(monkeypatch,lang):
     from unittest.mock import Mock
     signup=Mock();monkeypatch.setattr(accounts,'signup',signup)
     app=AppTest.from_file(APP_PATH,default_timeout=30)
@@ -104,11 +129,11 @@ def test_signup_has_username_and_accepts_eight_characters(monkeypatch,lang):
     app.run()
     app.text_input(key='signup_username').set_value('reviewer.one')
     app.text_input(key='email').set_value('reviewer@example.com')
-    app.text_input(key='password').set_value('abcdefgh')
-    app.text_input(key='confirm_password').set_value('abcdefgh')
+    app.text_input(key='password').set_value('abcdef')
+    app.text_input(key='confirm_password').set_value('abcdef')
     next(b for b in app.button if b.label==t('create_account',lang)).click().run()
     assert not app.exception and signup.call_count==1
-    assert signup.call_args.args[1:]==('reviewer.one','reviewer@example.com','abcdefgh')
+    assert signup.call_args.args[1:]==('reviewer.one','reviewer@example.com','abcdef')
     assert any(x.value==t('signup_success',lang) for x in app.success)
 
 

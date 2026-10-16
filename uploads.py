@@ -12,7 +12,7 @@ CATEGORIES = (
     "passport", "visa_form", "cover_letter", "hotel", "flight",
     "insurance", "employment", "travel_plan", "bank_statement", "supporting",
 )
-SCHEMA_VERSION = "review-v6-bank-budget"
+SCHEMA_VERSION = "review-v7-id-reference-note"
 
 
 def category_order(order=None):

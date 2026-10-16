@@ -17,6 +17,11 @@ def strict_identity_checks(data, existing=()):
     seen = set()
 
     def flag(doc, field, found, expected, reason="mismatch", scored=True):
+        # An extracted ID number without an independent readable reference is not
+        # a demonstrated mismatch. Keep the note; do not penalize the applicant.
+        id_reference_note=field=='national_id_number' and reason=='reference' and bool(found)
+        if id_reference_note:
+            scored=False
         key = (doc, field, found, expected, reason)
         if key in seen:
             return
@@ -25,9 +30,12 @@ def strict_identity_checks(data, existing=()):
                "Copy the identity field exactly; do not guess unreadable characters or change an official identity document.")
         if reason != "mismatch":
             fix = "Manual verification required: obtain a clear original or official transcription before submission. This field is unresolved."
+        if id_reference_note:
+            fix = (f"National ID number {found} was read, but an independent readable reference was unavailable. "
+                   "Verify it against the original ID when available. This is not a confirmed mismatch and does not deduct points.")
         issues.append(ValidationIssue(document_name=doc,field_name=field,found_value=found,
             expected_value=str(expected or "Readable authoritative identity evidence"),severity=Severity.CRITICAL if scored else Severity.HIGH,
-            recommended_fix=fix,message_key="identity."+reason,affects_score=scored))
+            recommended_fix=fix,message_key="identity.id_reference_note" if id_reference_note else "identity."+reason,affects_score=scored))
 
     def native_name(value):
         value = re.sub(r'[\u064b-\u065f\u0670\u0640]', '', value or '')

@@ -13,6 +13,10 @@ class AccountError(RuntimeError):
     pass
 
 
+# Supabase Auth clamps configured minimums below six to six.
+MIN_PASSWORD_LENGTH = 6
+
+
 def auth_client():
     url, key = setting("SUPABASE_URL"), setting("SUPABASE_ANON_KEY")
     if not url or not key:
@@ -41,7 +45,7 @@ def signup(client, username, email, password):
     username = username.strip().lower()
     if not valid_username(username):
         raise AccountError("username_invalid")
-    if len(password) < 8:
+    if len(password) < MIN_PASSWORD_LENGTH:
         raise AccountError("password_short")
     if not valid_email(email):
         raise AccountError("email_invalid")

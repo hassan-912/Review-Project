@@ -109,19 +109,56 @@ def test_invalid_username_rejected_without_network(name):
     assert not accounts.valid_username(name)
 
 
-def test_signup_eight_character_password_username_metadata(monkeypatch):
+@pytest.mark.parametrize('password',['abcdef','123456','!!!!!!'])
+def test_signup_six_character_password_without_character_rules(monkeypatch,password):
     db=Mock();db.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data=[]
     monkeypatch.setattr(accounts,'admin_client',lambda:db)
-    client=Mock();accounts.signup(client,'Test.User','test@example.com','abcdefgh')
+    client=Mock();accounts.signup(client,'Test.User','test@example.com',password)
     request=client.auth.sign_up.call_args.args[0]
-    assert request['options']['data']=={'username':'test.user'} and request['password']=='abcdefgh'
+    assert request['options']['data']=={'username':'test.user'} and request['password']==password
 
 
 def test_short_password_rejected_before_signup():
     client=Mock()
     with pytest.raises(accounts.AccountError,match='password_short'):
-        accounts.signup(client,'testuser','test@example.com','abcdefg')
+        accounts.signup(client,'testuser','test@example.com','abcde')
     client.auth.sign_up.assert_not_called()
+
+
+def test_id_number_without_reference_is_visible_without_deduction(complete_extraction):
+    from scorer import calculate_score
+    d=complete_extraction
+    baseline=calculate_score(run_validation(d)).score
+    d.identity_evidence=[IdentityEvidence(document='passport',source_file='passport.pdf',page=1,
+        national_id_number='30001011234567')]
+    issues=run_validation(d)
+    notes=[i for i in issues if i.message_key=='identity.id_reference_note']
+    assert len(notes)==1 and not notes[0].affects_score
+    assert notes[0].found_value=='30001011234567' and 'does not deduct points' in notes[0].recommended_fix
+    result=calculate_score(issues)
+    assert result.score==baseline and result.critical_count==0 and not result.provisional
+    assert result.readiness=='checks_passed'
+
+
+def test_readable_id_number_mismatch_still_deducts(complete_extraction):
+    from extractor import NationalIDInfo
+    from scorer import calculate_score
+    d=complete_extraction
+    d.national_id=NationalIDInfo(present=True,full_name=d.passport.full_name,id_number='30001011234567')
+    d.passport.national_id_number='30001011234568'
+    issues=run_validation(d)
+    assert any(i.field_name=='national_id_number' and i.message_key=='identity.mismatch'
+               and i.affects_score and i.severity==Severity.CRITICAL for i in issues)
+    assert calculate_score(issues).score<100
+
+
+def test_other_unresolved_identity_fields_remain_scored(complete_extraction):
+    d=complete_extraction
+    d.identity_evidence=[IdentityEvidence(document='hotel',source_file='hotel.pdf',
+        unreadable_fields=['passport_number'])]
+    issues=run_validation(d)
+    assert any(i.field_name=='passport_number' and i.message_key=='identity.unreadable'
+               and i.affects_score and i.severity==Severity.CRITICAL for i in issues)
 
 
 def test_null_absent_sections_preserve_missing_evidence():

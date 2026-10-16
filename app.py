@@ -166,7 +166,10 @@ def render_auth_screen():
             if not accounts.valid_email(email):
                 st.error(t("email_invalid"))
                 return
-            if mode == "create_account" and (len(password) < 8 or password != confirm):
+            if mode == "create_account" and len(password) < accounts.MIN_PASSWORD_LENGTH:
+                st.error(t("password_short"))
+                return
+            if mode == "create_account" and password != confirm:
                 st.error(t("password_mismatch"))
                 return
             try:
@@ -229,7 +232,9 @@ def handle_recovery():
         confirm = st.text_input(t("confirm_password"),type="password")
         submit = st.form_submit_button(t("save_password"),type="primary")
     if submit:
-        if len(password) < 8 or password != confirm:
+        if len(password) < accounts.MIN_PASSWORD_LENGTH:
+            st.error(t("password_short"))
+        elif password != confirm:
             st.error(t("password_mismatch"))
         else:
             try:
@@ -551,7 +556,11 @@ def render_report(result):
         st.subheader(t('review_limitations'))
         st.caption(t('review_limitation'))
         for limitation in limitations:
-            st.info(limitation.recommended_fix)
+            if limitation.message_key=='identity.id_reference_note':
+                st.info(issue_text(limitation,st.session_state.lang)[1]+'\n\n'+t('found')+': '+
+                        isolated_value(limitation.found_value or t('unknown'),st.session_state.lang))
+            else:
+                st.info(limitation.recommended_fix)
     if quality:=result.get("quality"):
         st.subheader(t("quality_title"))
         complete,pages,model=st.columns(3)

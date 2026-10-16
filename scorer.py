@@ -107,7 +107,7 @@ def calculate_score(
         Severity.LOW: 0,
     }
     scored_issues = [issue for issue in issues if issue.affects_score]
-    provisional = any(not issue.affects_score for issue in issues)
+    provisional = any(not issue.affects_score and issue.message_key!='identity.id_reference_note' for issue in issues)
     for issue in scored_issues:
         counts[issue.severity] = counts.get(issue.severity, 0) + 1
 
