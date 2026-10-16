@@ -17,6 +17,19 @@ from supporting_review import check_supporting, extraction_quality
 import accounts
 
 
+def test_evidence_crop_includes_value_in_separate_table_column():
+    doc=pymupdf.open()
+    page=doc.new_page(width=600,height=300)
+    page.insert_text((40,100),'Main destination')
+    page.insert_text((430,100),'Greece')
+    raw=doc.tobytes()
+    png,number,method=render_source(
+        {'source_file':'form.pdf','page':1,'text':'Main destination Greece'},
+        {'visa_form':[('form.pdf',raw)]})
+    assert number==1 and method=='matched_region'
+    assert Image.open(BytesIO(png)).width>900
+
+
 def pdf_bytes(*pages):
     with pymupdf.open() as pdf:
         for text in pages:

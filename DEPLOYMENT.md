@@ -31,7 +31,7 @@ fallback fonts between scripts so an Arabic run cannot hide subsequent English r
 
 Regression tests use synthetic identities/documents. Private live-case review artifacts
 remain under ignored local directories and are never committed.
-The corrected release passes 180 offline regression/UI tests. A private live two-pass
+The corrected release passes 181 offline regression/UI tests. A private live two-pass
 review was checked against the original pages, including the side-by-side evidence view
 and a rendered three-page PDF; the source documents are not part of the repository.
 

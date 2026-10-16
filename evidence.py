@@ -119,6 +119,10 @@ def render_source(location,uploaded_files):
                 found=page.search_for(quote) if quote and len(quote.strip())>=2 and not location.get('layout') else []
                 if found:
                     rect=pymupdf.Rect(found[0])
+                    # A quote can span lines or table columns. Include every matched
+                    # fragment so the crop contains the value as well as its label.
+                    for fragment in found[1:]:
+                        rect |= fragment
                     rect=pymupdf.Rect(rect.x0-65,rect.y0-35,rect.x1+65,rect.y1+35)&page.rect
                     pix=page.get_pixmap(matrix=pymupdf.Matrix(min(2,1200/max(rect.width,rect.height)),min(2,1200/max(rect.width,rect.height))),clip=rect,alpha=False)
                     return pix.tobytes('png'),index+1,'matched_region'
