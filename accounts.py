@@ -120,12 +120,15 @@ def restore_session(client, access_token, refresh_token):
 def reserve_review(client, session, request_id=None, client_name=""):
     actor = verified_actor(client, session)
     try:
+        ensure_service_available()
         allowed = admin_client().rpc("reserve_review_attempt", {
             "p_user_id": actor.user_id,
             "p_request_id": request_id or str(uuid.uuid4()),
             "p_hourly_limit": positive_int("REVIEWS_PER_HOUR", 5),
             "p_daily_limit": positive_int("REVIEWS_PER_DAY", 20),
         }).execute().data
+    except AccountError:
+        raise
     except Exception as exc:
         raise AccountError("quota_unavailable") from exc
     if allowed is not True:
@@ -177,7 +180,7 @@ def finish_attempt(client, session, request_id, score=None):
 
 def team_attempts(client, session):
     verified_actor(client, session, require_admin=True)
-    return admin_client().table("review_attempts").select("client_name,submitted_username,submitted_by,score,requested_at,status").order("requested_at",desc=True).limit(1000).execute().data or []
+    return admin_client().table("review_attempts").select("request_id,client_name,submitted_username,submitted_by,score,requested_at,status").order("requested_at",desc=True).limit(1000).execute().data or []
 
 
 def super_update(client, session, target_id, role, approved, hourly, daily):
@@ -191,10 +194,10 @@ def super_update(client, session, target_id, role, approved, hourly, daily):
         raise AccountError("access_update_failed") from exc
 
 
-def model_router(client,session):
+def model_router(client,session,review_id=None):
     from model_routing import ModelRouter
     actor=verified_actor(client,session)
-    return ModelRouter(admin_client(),actor.user_id)
+    return ModelRouter(admin_client(),actor.user_id,review_id=review_id)
 
 
 def model_dashboard(client,session):
@@ -232,3 +235,54 @@ def save_upload_category_order(client,session,order):
     if len(order)!=len(CATEGORIES) or set(order)!=set(CATEGORIES):
         raise AccountError('access_update_failed')
     admin_client().rpc('set_upload_category_order',{'p_actor':actor.user_id,'p_order':list(order)}).execute()
+
+
+def service_controls():
+    """Server-only read; no credential or applicant information is returned."""
+    try:
+        rows = admin_client().table('app_controls').select('maintenance_enabled,reviews_enabled').eq('id',True).limit(1).execute().data
+        if not rows or not isinstance(rows[0].get('maintenance_enabled'),bool):
+            raise ValueError('Missing service controls')
+        return rows[0]
+    except Exception as exc:
+        raise AccountError('service_unavailable') from exc
+
+
+def ensure_service_available():
+    controls = service_controls()
+    if controls['maintenance_enabled']:
+        raise AccountError('maintenance_message')
+    return controls
+
+
+def set_maintenance(client,session,enabled):
+    actor = verified_actor(client,session,require_super=True)
+    admin_client().rpc('set_maintenance_mode',{'p_actor':actor.user_id,'p_enabled':bool(enabled)}).execute()
+
+
+def billing_settings(client,session):
+    verified_actor(client,session,require_super=True)
+    return admin_client().table('app_controls').select('billing_mode,monthly_budget_usd').eq('id',True).single().execute().data
+
+
+def save_billing_settings(client,session,mode,budget):
+    actor = verified_actor(client,session,require_super=True)
+    if mode not in ('free','paid') or not 0 < float(budget) <= 100000:
+        raise AccountError('access_update_failed')
+    admin_client().rpc('set_billing_tracking',{'p_actor':actor.user_id,'p_mode':mode,'p_budget':float(budget)}).execute()
+
+
+def cost_events(client,session,start,end):
+    verified_actor(client,session,require_super=True)
+    rows = []
+    offset = 0
+    # Page through the full period: a UI row limit must not silently understate spend.
+    while True:
+        page = admin_client().table('model_usage_events').select(
+            'id,model,user_id,review_id,created_at,status,input_tokens,output_tokens,cached_input_tokens,'
+            'billing_mode,input_usd_per_million,cached_usd_per_million,output_usd_per_million'
+        ).gte('created_at',start.isoformat()).lt('created_at',end.isoformat()).order('created_at').order('id').range(offset,offset+999).execute().data or []
+        rows.extend(page)
+        if len(page) < 1000:
+            return rows
+        offset += len(page)

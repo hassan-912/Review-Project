@@ -73,6 +73,7 @@ def no_browser_recovery_token(monkeypatch):
     # AppTest has no browser JS and replaces its component registry between app instances.
     from uploads import CATEGORIES
     monkeypatch.setattr(accounts,"upload_category_order",lambda *a:list(CATEGORIES))
+    monkeypatch.setattr(accounts,'service_controls',lambda:dict(maintenance_enabled=False,reviews_enabled=True))
     import recovery
     monkeypatch.setattr(recovery,"recovery_tokens",lambda:None)
 
@@ -106,7 +107,8 @@ def test_approved_pages_are_bilingual(monkeypatch,lang,page):
     assert not app.exception
     assert app.title[0].value==t('review_title' if page=='review' else page,lang)
     if page=='review':
-        assert len(app.get('file_uploader'))==10
+        from uploads import CATEGORIES
+        assert len(app.get('file_uploader'))==len(CATEGORIES)
 
 
 def test_failed_legacy_restore_clears_url_and_explains(monkeypatch):
@@ -209,8 +211,10 @@ def test_super_admin_dashboard_and_controls(monkeypatch,lang):
     app.session_state.supabase_session=SimpleNamespace(expires_at=time.time()+1000,access_token='test',refresh_token='test')
     app.session_state.current_page='admin';app.run()
     assert not app.exception
-    assert len([m for m in app.metric if m.label==t('remaining_today',lang) and m.value=='18'])==4
     assert any(c.label==t('reviews_enabled',lang) for c in app.checkbox)
+    app.selectbox(key='admin_section').select('admin_models').run()
+    assert not app.exception
+    assert len([m for m in app.metric if m.label==t('remaining_today',lang) and m.value=='18'])==4
     assert any(t('quota_note',lang)==c.value for c in app.caption)
 
 
@@ -240,3 +244,81 @@ ui['render_fix_checklist'](st.session_state.test_result['issues'],st.session_sta
     assert not app.exception
     assert len(app.session_state.test_result.get('evidence_images',{}))==2
     assert len(app.get('image'))==2
+
+
+@pytest.mark.parametrize('lang',['en','ar'])
+def test_cost_dashboard_tracks_free_and_paid_and_exports(monkeypatch,lang):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from tests.test_admin_and_appointments import cost_event
+    now=datetime.now(ZoneInfo('Africa/Cairo')).isoformat()
+    monkeypatch.setattr(accounts,'billing_settings',lambda *a:dict(billing_mode='free',monthly_budget_usd=25))
+    monkeypatch.setattr(accounts,'cost_events',lambda *a:[cost_event(created_at=now),cost_event(id='free',billing_mode='free',created_at=now)])
+    monkeypatch.setattr(accounts,'team_attempts',lambda *a:[])
+    ui=AppTest.from_string('''
+import app,streamlit as st
+app._init_session_state()
+app.render_cost_dashboard(object(),object())
+''',default_timeout=30)
+    ui.session_state.lang=lang;ui.run()
+    assert not ui.exception and not ui.error
+    assert next(m for m in ui.metric if m.label==t('estimated_paid',lang)).value=='$0.0412'
+    assert next(m for m in ui.metric if m.label==t('projected_paid',lang)).value=='$0.0825'
+    assert len(ui.get('download_button'))==1
+    assert len(ui.dataframe)==2
+
+
+@pytest.mark.parametrize('role',['user','admin','super_admin'])
+def test_maintenance_blocks_customer_pages_but_owner_can_resume(monkeypatch,role):
+    state=dict(maintenance_enabled=True,reviews_enabled=True)
+    monkeypatch.setattr(accounts,'service_controls',lambda:state.copy())
+    def update(*args):state['maintenance_enabled']=args[-1]
+    monkeypatch.setattr(accounts,'set_maintenance',update)
+    actor=accounts.Actor('00000000-0000-0000-0000-000000000001','test@example.com',True,role,'owner')
+    monkeypatch.setattr(accounts,'verified_actor',lambda *a,**kw:actor)
+    monkeypatch.setattr(accounts,'refresh_if_needed',lambda client,session:session)
+    monkeypatch.setattr(accounts,'team_profiles',lambda *a:[])
+    monkeypatch.setattr(accounts,'team_attempts',lambda *a:[])
+    monkeypatch.setattr(accounts,'review_logs',lambda *a,**kw:[])
+    ui=AppTest.from_file(APP_PATH,default_timeout=30)
+    ui.session_state.auth_client=object()
+    ui.session_state.supabase_session=SimpleNamespace(expires_at=time.time()+1000,access_token='test',refresh_token='test')
+    ui.session_state.current_page='history'
+    ui.session_state.admin_section='admin_maintenance'
+    ui.run()
+    assert not ui.exception
+    assert not ui.get('file_uploader')
+    if role=='super_admin':
+        next(b for b in ui.button if b.label==t('resume_website','en')).click().run()
+        assert not state['maintenance_enabled'] and state['reviews_enabled']
+    else:
+        assert ui.title[0].value==t('maintenance_title','en')
+        assert not ui.selectbox
+
+
+def test_appointment_report_shows_specific_recommendation_in_both_languages(complete_extraction):
+    from appointment_review import appointment_issues
+    from extractor import AppointmentInfo
+    complete_extraction.appointments=[AppointmentInfo(source_file='appointment.pdf',appointment_date='2026-12-01')]
+    issues=appointment_issues(complete_extraction)
+    for lang in ('en','ar'):
+        ui=AppTest.from_string('''
+import app,streamlit as st
+app._init_session_state()
+app.render_fix_checklist(st.session_state.issues)
+''',default_timeout=30)
+        ui.session_state.lang=lang;ui.session_state.issues=issues;ui.run()
+        assert not ui.exception
+        from i18n import issue_text
+        assert '30/01/2027' in issue_text(issues[0],lang)[1]
+
+
+def test_maintenance_guest_has_only_management_sign_in(monkeypatch):
+    monkeypatch.setattr(accounts,'service_controls',lambda:dict(maintenance_enabled=True,reviews_enabled=True))
+    ui=AppTest.from_file(APP_PATH,default_timeout=30)
+    ui.session_state.access_mode='create_account'
+    ui.run()
+    assert not ui.exception
+    assert ui.title[0].value==t('maintenance_title','en')
+    assert not ui.get('file_uploader') and not ui.get('segmented_control')
+    assert not any(button.label==t('create_account','en') for button in ui.button)

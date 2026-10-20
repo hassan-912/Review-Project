@@ -233,6 +233,17 @@ class VisaApplicationInfo(BaseModel):
     first_entry_country: Optional[str] = None
 
 
+class AppointmentInfo(BaseModel):
+    """An applicant's actual appointment, never the letter's issue/print date."""
+    source_file: str
+    page: int = Field(1, ge=1)
+    appointment_date: Optional[str] = Field(None, description="Actual embassy/visa-centre appointment date YYYY-MM-DD; null when ambiguous")
+    appointment_time: Optional[str] = Field(None, description="Printed appointment local time HH:MM; do not invent a timezone")
+    applicant_name: Optional[str] = None
+    embassy: Optional[str] = None
+    text: Optional[str] = Field(None, description="Verbatim quote containing the appointment date/time and its appointment label")
+
+
 class NationalIDInfo(BaseModel):
     present: bool = False
     full_name: Optional[str] = None
@@ -365,6 +376,7 @@ class VisaDocumentExtraction(BaseModel):
     employment: EmploymentInfo = Field(default_factory=EmploymentInfo)  # type: ignore
     visa_form: VisaApplicationInfo = Field(default_factory=VisaApplicationInfo)  # type: ignore
     national_id: NationalIDInfo = Field(default_factory=NationalIDInfo)
+    appointments: list[AppointmentInfo] = Field(default_factory=list)
     identity_evidence: list[IdentityEvidence] = Field(default_factory=list)
     cover_letter_text: NarrativeSection = Field(default_factory=NarrativeSection)
     travel_plan: NarrativeSection = Field(default_factory=NarrativeSection)
@@ -406,7 +418,7 @@ class VisaDocumentExtraction(BaseModel):
         # as an empty model so validation can flag it, without inventing any fields.
         return {} if value is None else value
 
-    @field_validator("identity_evidence","detected_documents","urgent_actions","evidence_locations","supporting_documents","document_audits","bank_statements","trip_costs","booking_statuses",mode="before")
+    @field_validator("appointments","identity_evidence","detected_documents","urgent_actions","evidence_locations","supporting_documents","document_audits","bank_statements","trip_costs","booking_statuses",mode="before")
     @classmethod
     def absent_arrays(cls,value):
         return [] if value is None else value
@@ -492,6 +504,13 @@ Record booking_statuses for flight and hotel reservations. HELD/ON HOLD/OPTION b
 are acceptable reservations: say 'Booking is on hold'. Do not deduct points, infer
 cancellation from a payment deadline, or demand purchased tickets/prepaid hotels.
 Extract EVERY accommodation booking into the hotel array, one entry per booking. Use [] if absent.
+Extract appointments from actual embassy/visa-centre appointment letters, including files in the
+appointment category. Record source_file, page, appointment_date, appointment_time, applicant_name,
+embassy and a verbatim quote containing the appointment label and date/time. Use the actual
+appointment, NEVER the letter issue/print/payment date. Interpret DD/MM/YYYY as day/month/year
+when clearly established by the document; leave genuinely ambiguous dates null. Exclude other
+people's appointments and cancelled/superseded appointments. Preserve distinct current letters;
+never silently choose between conflicting dates. Do not invent a universal embassy processing rule.
 
 CONTENT CLASSIFICATION AND STRICT TRANSCRIPTION:
 Upload categories and filenames are hints, never proof of document type. Read every page.

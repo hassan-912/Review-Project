@@ -13,6 +13,7 @@ ALIASES = {
     "end_date": {"end_date","intended_departure","return_date","check_out_date","valid_until","approved_leave_end"},
 }
 DOCS = {"visa_form":("visa application","visa_form"),"passport":("passport",),"hotel":("hotel",),
+        "appointment":("appointment",),
         "flight":("flight",),"insurance":("insurance",),"employment":("employment","hr"),
         "cover_letter":("cover letter","cover_letter"),"travel_plan":("travel itinerary","travel plan","travel_plan"),
         "national_id":("national id","national_id"),"supporting":("supporting",)}
@@ -79,7 +80,7 @@ def attach_evidence(issues,data,uploaded_files):
                         (name in explicit if explicit else category not in (None,'supporting') and categories[name]==category)]
             issue.evidence=[{"source_file":name,"page":1,"field_name":issue.field_name,"value":issue.found_value,
                              "text":issue.found_value or "","box":None,"preview":True} for name in candidates[:2]]
-        reference=("hotel" if issue.field_name=='destination_country' else "employment" if issue.message_key=="hr.window" else "national_id" if issue.field_name.startswith("national_id") else
+        reference=("appointment" if issue.message_key.startswith('appointment.') else "hotel" if issue.field_name=='destination_country' else "employment" if issue.message_key=="hr.window" else "national_id" if issue.field_name.startswith("national_id") else
                    "passport" if any(w in issue.field_name for w in ("name","passport","birth")) else "visa_form")
         issue.reference_evidence=[loc for loc in issue.reference_evidence if source_is_grounded(loc,uploaded_files)] or matching(issue.expected_value,reference)
         if not issue.affects_score and not issue.reference_evidence:

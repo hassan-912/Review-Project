@@ -10,9 +10,9 @@ from io import BytesIO
 
 CATEGORIES = (
     "passport", "visa_form", "cover_letter", "hotel", "flight",
-    "insurance", "employment", "travel_plan", "bank_statement", "supporting",
+    "insurance", "employment", "travel_plan", "bank_statement", "appointment", "supporting",
 )
-SCHEMA_VERSION = "review-v7-id-reference-note"
+SCHEMA_VERSION = "review-v8-appointment-buffer"
 
 
 def category_order(order=None):

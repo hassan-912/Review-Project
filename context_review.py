@@ -8,7 +8,7 @@ from model_routing import generate_automatically, ModelUnavailable
 from document_sources import source_manifest, source_is_grounded
 from finance_review import BankStatement, TripCost, BookingStatus
 from extractor import (DocumentAudit, WritingRecommendation, CoverLetterInfo, NarrativeSection,
-                       SupportingDocument, VisaApplicationInfo, NationalIDInfo, SourceField)
+                       SupportingDocument, VisaApplicationInfo, NationalIDInfo, SourceField, AppointmentInfo)
 
 
 CHECKS = {"applicant_status", "identity_context", "destination", "form_completeness",
@@ -55,6 +55,7 @@ class ContextDocumentAudit(DocumentAudit):
 
 
 class ContextReview(BaseModel):
+    appointments: list[AppointmentInfo] = Field(default_factory=list)
     bank_statements: list[BankStatement] = Field(default_factory=list)
     trip_costs: list[TripCost] = Field(default_factory=list)
     booking_statuses: list[BookingStatus] = Field(default_factory=list)
@@ -116,6 +117,12 @@ backs and duplicates/translations. A blank inspected page is not unreadable. Rec
 or ambiguous text as specific uncertainties. Never pretend an omitted page was read.
 
 CONTEXT RULES:
+- Independently read actual embassy/visa-centre appointment letters. Return appointments with
+  the applicant's current appointment date and local time, source file/page and a verbatim quote.
+  Do not confuse the letter issue date with the appointment date, invent a date, or use another
+  person's appointment. Preserve conflicting current appointments for manual verification.
+  The agency's 60-calendar-day travel buffer is calculated downstream, not an embassy rule;
+  do not duplicate that arithmetic as a contextual finding or claim a guaranteed processing time.
 - University enrollment is EDUCATION, not an employer/HR leave approval. A student need not supply
   employment leave dates. A student can separately be employed: only actual employment evidence
   makes HR checks applicable. Note an explicit university travel-permission caveat as advice.
@@ -201,6 +208,8 @@ Return ONLY JSON matching this schema; all top-level keys are required:
         return data
     review = parse_context(raw, manifest)
     data.context_checks=[check.model_dump() for check in review.checks]
+    if review.appointments or any(entry['category_hint']=='appointment' for entry in manifest.values()):
+        data.appointments=review.appointments
     data.model_used=' + '.join(dict.fromkeys(model for model in [data.model_used,*used_models] if model)) or data.model_used
     data.document_audits = review.document_audits
     data.bank_statements=review.bank_statements

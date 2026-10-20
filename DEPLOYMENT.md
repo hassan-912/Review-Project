@@ -1,5 +1,59 @@
 # MG Visa File Review — production release
 
+## Administration workspace, cost tracking and appointments — 2026-10-19
+
+The administration dashboard now separates Reviews, Access approval and revoke,
+Upload categories, Models and usage, Review costs, Team review log and Website maintenance.
+Ordinary admins retain approval/log access; global settings, billing and maintenance require
+an approved super administrator, reverified on the server and in privileged database functions.
+
+The connected database migration is saved in
+`supabase/migrations/20261018232642_admin_workspace.sql`. It adds server-only pricing and
+usage snapshots, review references, maintenance state and the appointment category. It was
+applied to `mgvisa-reviewer`; maintenance remains OFF and tracking remains FREE. The UI
+source still needs deploying through the application's normal release process.
+
+Costs are USD estimates for recorded app inference only. Each new reservation captures its
+billing mode and effective input/cached-input/output rates. Output includes thinking tokens.
+The cost page provides date filters, daily trends, model and review totals, a monthly alert
+and a CSV export. Switching tracking mode neither enables Google billing nor changes quota
+limits. The alert is not a spending block. Unknown historical rates/usage remain unknown,
+not zero; totals can be incomplete. No applicant documents or prompts are stored. Token-only
+usage records now persist beyond 32 days so previous billing months remain reconcilable.
+Review names still follow existing review-attempt retention; older costs retain their IDs.
+Rates are seeded from Google's official Standard pricing verified 2026-10-19, with the
+published Flash increase scheduled for 2027-01-01. Future price changes require updating
+`model_token_prices`; previous usage is not repriced. Taxes, hosting, external API usage,
+tools and cache-storage fees are excluded. Reconcile against Google billing.
+
+Maintenance blocks the public application and all customer pages, including active sessions
+on the next interaction or within the 15-second watchdog interval. The approved super admin
+keeps management access to resume service. Both review and inference reservations reject
+maintenance at the database layer. A request already sent to Google cannot be recalled; it
+may finish and incur usage. Maintenance and the separate new-review pause do not overwrite
+each other. A post-inference check prevents displaying a report during maintenance.
+
+Appointment uploads are read by both extraction passes. The deterministic agency rule is a
+minimum of 60 calendar days after the actual appointment date, checked independently against
+visa-form entry, outbound flight departure and every hotel check-in. This implements the
+requested rejection of 2027-01-20 following a 2026-12-01 appointment (exactly 50 days), and
+recommends 2027-01-30 or later. This is an agency planning buffer, not an embassy processing
+requirement or guarantee. Unreadable/conflicting appointment dates produce manual verification
+and a provisional result, without inventing a date-based deduction. Appointment uploads are
+optional; old cache entries are invalidated through the updated review schema version.
+
+Verification: the full offline regression suite passed 238 tests, followed by focused checks
+for the final maintenance-only sign-in restriction. English/Arabic dashboard rendering,
+CSV export, appointment boundaries, cost arithmetic and permission enforcement are covered.
+
+Database verification: private tables have RLS enabled and no anon/authenticated privileges;
+new privileged functions use SECURITY INVOKER and are service-role-only. Rollback-only tests
+confirmed maintenance blocks both reservation paths, unauthorized changes fail, and completing
+usage twice cannot overwrite recorded token counts. Advisor findings for policy-free private
+tables are intentional. The existing leaked-password-protection advisory remains unrelated to
+this release: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
+
+
 ## ID reference notes and signup - 2026-10-17
 
 A national ID number extracted from a document without an independent readable ID-number

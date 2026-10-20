@@ -27,14 +27,15 @@ def quota_cooldown(exc):
 
 
 class ModelRouter:
-    def __init__(self, database, user_id):
-        self.db, self.user_id = database, user_id
+    def __init__(self, database, user_id, review_id=None):
+        self.db, self.user_id, self.review_id = database, user_id, review_id
         rows = database.table("model_catalog").select("model,priority,enabled").order("priority").execute().data or []
         self.models = [r["model"] for r in rows if r["enabled"] and r["model"] in FREE_MODELS]
 
     def reserve(self, model, input_tokens):
-        event = self.db.rpc("reserve_model_request", {
+        event = self.db.rpc("reserve_model_review_request", {
             "p_user_id": self.user_id, "p_model": model, "p_tokens": input_tokens,
+            "p_review_id": self.review_id,
         }).execute().data
         return event
 
@@ -45,11 +46,13 @@ class ModelRouter:
             return value if isinstance(value,int) and value>=0 else None
         input_tokens=token_count("prompt_token_count")
         total=token_count("total_token_count")
-        output_tokens=(max(0,total-input_tokens) if total is not None and input_tokens is not None else
-                       (token_count("candidates_token_count") or 0)+(token_count("thoughts_token_count") or 0) if usage else None)
-        self.db.rpc("finish_model_request", {
+        candidates, thoughts = token_count("candidates_token_count"), token_count("thoughts_token_count")
+        output_tokens = (total-input_tokens if total is not None and input_tokens is not None and total>=input_tokens
+                         else (candidates or 0)+(thoughts or 0) if candidates is not None or thoughts is not None else None)
+        self.db.rpc("finish_model_usage", {
             "p_event": event, "p_user_id": self.user_id, "p_status": status,
             "p_input": input_tokens, "p_output": output_tokens,
+            "p_cached_input": token_count("cached_content_token_count") if usage else None,
             "p_latency": max(0, int(elapsed * 1000)), "p_cooldown": cooldown,
         }).execute()
 

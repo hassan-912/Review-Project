@@ -269,6 +269,7 @@ _DOCUMENTS = {
     "employment": ("Employment documents", "مستندات العمل"),
     "travel_plan": ("Travel plan", "خطة الرحلة"),
     "supporting": ("Supporting documents", "المستندات الداعمة"),
+    "appointment": ("Embassy appointment", "موعد السفارة"),
 }
 for key, pair in _DOCUMENTS.items():
     _add("doc_" + key, *pair)
@@ -323,6 +324,7 @@ _FIELDS = {
     "national_id_issue": ("National ID issue date", "تاريخ إصدار بطاقة الهوية"),
     "national_id_expiry": ("National ID expiry date", "تاريخ انتهاء بطاقة الهوية"),
     "identity_date_order": ("Identity issue / expiry dates", "ترتيب تاريخي إصدار الهوية وانتهائها"),
+    "appointment_date": ("Embassy appointment date", "تاريخ موعد السفارة"),
 }
 for key, pair in _FIELDS.items():
     _add("field_" + key, *pair)
@@ -351,6 +353,7 @@ def document_label(name: str, lang: str = "en") -> str:
         ("Flight Reservation", "حجز الطيران"), ("Employment Documents", "مستندات العمل"),
         ("Travel Itinerary", "خطة الرحلة"), ("Cover Letter", "الخطاب التوضيحي"),
         ("National ID", "بطاقة الهوية"), ("Supporting Documents", "المستندات الداعمة"),
+        ("Embassy Appointment", "موعد السفارة"),
         ("Passport", "جواز السفر"), ("Flight", "الطيران"), ("Hotel", "الإقامة"),
     ]
     for source, target in translations:
@@ -486,3 +489,54 @@ ISSUE_AR.update({
     "support.unverified":"تعذّر تأكيد هذه المعلومة من المستندات المرفقة. اطلب دليلاً واضحاً أو تحقق من جهة الإصدار؛ توافق النصوص لا يثبت الأصالة.",
     "evidence.incomplete":"لم تُقرأ بعض الصفحات أو لم يمكن تتبع البيانات إلى مصدر واضح. راجع الأصول وأرفق نسخة أوضح أو تحقق يدوياً قبل الاعتماد على النتيجة.",
 })
+
+
+# Administration workspace and appointment planning.
+for item in [
+    ('admin_section','Dashboard section','قسم لوحة الإدارة'),
+    ('admin_reviews','Reviews','المراجعات'),
+    ('admin_access','Access approval and revoke','الموافقة على الوصول وإلغاؤه'),
+    ('admin_uploads','Upload categories','فئات رفع المستندات'),
+    ('admin_models','Models and usage','النماذج والاستخدام'),
+    ('admin_costs','Review costs','تكاليف المراجعات'),
+    ('admin_team_log','Team review log','سجل مراجعات الفريق'),
+    ('admin_maintenance','Website maintenance','صيانة الموقع'),
+    ('super_admin_section','Only the super administrator can manage this section.','إدارة هذا القسم متاحة للمسؤول الرئيسي فقط.'),
+    ('reviews_open','New reviews are enabled.','المراجعات الجديدة متاحة.'),
+    ('reviews_closed','New reviews are paused.','المراجعات الجديدة متوقفة مؤقتاً.'),
+    ('maintenance_title','Service under maintenance','الخدمة قيد الصيانة'),
+    ('maintenance_message','The service is currently under maintenance. Please try again later.','الخدمة قيد الصيانة حالياً. يرجى المحاولة لاحقاً.'),
+    ('maintenance_hint','Pause customer access across the website. Only the approved super administrator keeps management access to resume service. No new reviews can start during maintenance. Existing sessions check within 15 seconds; a request already sent to Google may still finish and incur usage.','أوقف وصول العملاء إلى الموقع. يبقى وصول الإدارة للمسؤول الرئيسي المعتمد لإعادة تشغيل الخدمة. لا تبدأ مراجعات جديدة أثناء الصيانة. تتحقق الجلسات المفتوحة خلال 15 ثانية؛ وقد يكتمل طلب أُرسل إلى Google بالفعل وتُحسب تكلفته.'),
+    ('website_live','The website is live.','الموقع متاح.'),
+    ('pause_website','Pause website for maintenance','إيقاف الموقع للصيانة'),
+    ('resume_website','Resume website','إعادة تشغيل الموقع'),
+    ('management_sign_in','Administrator sign-in','تسجيل دخول الإدارة'),
+    ('check_service','Check service status','التحقق من حالة الخدمة'),
+    ('service_unavailable','Service status is unavailable. Please try again shortly.','تعذر التحقق من حالة الخدمة. يرجى المحاولة بعد قليل.'),
+    ('appointment_hint','Upload the actual embassy/visa-centre appointment letter. Our planning rule requires travel to start at least 60 calendar days after the appointment; this is not an embassy processing guarantee.','ارفع خطاب موعد السفارة أو مركز التأشيرات. تشترط قاعدة التخطيط لخدمتنا بدء السفر بعد الموعد بـ60 يوماً تقويمياً على الأقل؛ وليست ضماناً لمدة معالجة السفارة.'),
+    ('cost_note','USD estimates for this app only, based on recorded input, cached input and output including thinking tokens. Rates and billing mode are saved per request. These are not Google invoices; taxes, hosting, external usage, tools and cache-storage fees are excluded. Historical requests without usage or rate snapshots remain unknown.','تقديرات بالدولار لهذا التطبيق فقط، وفق رموز الإدخال والإدخال المخزن والإخراج بما يشمل التفكير. تُحفظ الأسعار ووضع الفوترة لكل طلب. ليست فواتير Google ولا تشمل الضرائب أو الاستضافة أو الاستخدام الخارجي أو الأدوات أو تخزين الذاكرة المؤقتة. تبقى تكلفة الطلبات القديمة التي لا تتوفر لها بيانات استخدام أو أسعار غير معروفة.'),
+    ('pricing_source','Official Gemini pricing','أسعار Gemini الرسمية'),
+    ('billing_mode','Billing tracking mode','وضع تتبع الفوترة'),
+    ('billing_free','Free tier — project paid costs','المستوى المجاني — توقع التكلفة المدفوعة'),
+    ('billing_paid','Paid tier — estimate paid usage','المستوى المدفوع — تقدير الاستخدام المدفوع'),
+    ('billing_mode_hint','This changes tracking for future requests only. It does not enable Google billing, change Google quotas or charge a payment method. Switch to paid tracking only after your API project is billed.','يغير هذا التتبع للطلبات المستقبلية فقط، ولا يفعّل فوترة Google أو يغير حصصها أو يخصم من وسيلة الدفع. اختر التتبع المدفوع بعد تفعيل فوترة مشروع API.'),
+    ('monthly_budget','Monthly spending alert (USD)','تنبيه الإنفاق الشهري بالدولار'),
+    ('cost_period','Cost period (Cairo dates)','فترة التكلفة بتوقيت القاهرة'),
+    ('choose_cost_dates','Choose a start and end date.','اختر تاريخ البداية والنهاية.'),
+    ('cost_date_limit','Choose a period of at most 366 days.','اختر فترة لا تزيد عن 366 يوماً.'),
+    ('estimated_paid','Estimated paid usage (USD)','الاستخدام المدفوع المقدر بالدولار'),
+    ('projected_paid','Equivalent paid cost (USD)','التكلفة المكافئة بالمستوى المدفوع بالدولار'),
+    ('cost_requests','AI requests','طلبات الذكاء الاصطناعي'),
+    ('unknown_cost','Requests with unknown costs','طلبات بتكلفة غير معروفة'),
+    ('budget_progress','This month: ${spent} estimated / ${budget} alert threshold','هذا الشهر: تقدير ${spent} / حد التنبيه ${budget}'),
+    ('budget_hint','The monthly threshold is an alert, not a spending block. Set payment and spending controls in Google AI Studio separately.','الحد الشهري للتنبيه فقط ولا يمنع الإنفاق. اضبط الدفع وحدود الإنفاق في Google AI Studio بصورة منفصلة.'),
+    ('budget_reached','The monthly estimated spending alert threshold has been reached.','بلغ الإنفاق الشهري المقدر حد التنبيه.'),
+    ('cost_incomplete','Some costs are unknown. Displayed totals include known amounts only and may understate usage.','بعض التكاليف غير معروفة. تشمل الإجماليات المبالغ المعروفة فقط وقد تكون أقل من الاستخدام الفعلي.'),
+    ('no_cost_events','No AI requests were recorded in this period.','لم تُسجل طلبات ذكاء اصطناعي في هذه الفترة.'),
+    ('cost_by_model','Costs by model','التكاليف حسب النموذج'),
+    ('cost_by_review','Costs per review — all uploaded files','التكاليف لكل مراجعة — جميع الملفات المرفوعة'),
+    ('review_reference','Review reference','مرجع المراجعة'),
+    ('download_costs','Download cost details (CSV)','تنزيل تفاصيل التكاليف CSV'),
+    ('cost_load_failed','Cost tracking is unavailable. Refresh or check the administration database migration.','تتبع التكلفة غير متاح. حدّث الصفحة أو تحقق من تحديث قاعدة بيانات الإدارة.'),
+]:
+    _add(*item)

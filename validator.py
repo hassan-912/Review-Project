@@ -810,6 +810,8 @@ def run_validation(data: VisaDocumentExtraction) -> list[ValidationIssue]:
     all_issues.extend(_check_identity_name_crosscheck(data))      # Rule 2 — CRITICAL / HIGH
     all_issues.extend(_check_dob_crosscheck(data))                # Rule 3 — HIGH
     all_issues.extend(_check_date_alignment(data))                # 5-date matrix
+    from appointment_review import appointment_issues
+    all_issues.extend(appointment_issues(data))
     all_issues.extend(_check_schengen_city_validity(data))        # Geography engine
     all_issues.extend(_check_insurance_coverage(data))
     all_issues.extend(_check_schengen_destination_rule(data))

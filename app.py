@@ -7,7 +7,7 @@ from io import StringIO
 import logging
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, date, time as datetime_time, timedelta
 from zoneinfo import ZoneInfo
 
 import streamlit as st
@@ -91,12 +91,15 @@ def _refresh_actor():
     return actor
 
 
-@st.fragment(run_every="60s")
+@st.fragment(run_every="15s")
 def session_watchdog():
     if not st.session_state.get("supabase_session"):
         return
     try:
         previous = st.session_state.actor
+        controls=accounts.service_controls()
+        if controls['maintenance_enabled'] != st.session_state.get('maintenance_active',False):
+            st.rerun()
         actor = _refresh_actor()
         if previous and (previous.approved != actor.approved or previous.role != actor.role):
             st.session_state.review_result = None
@@ -146,13 +149,13 @@ def render_pending_screen(standalone=False):
             st.rerun()
 
 
-def render_auth_screen():
+def render_auth_screen(management_only=False):
     st.caption(t("internal"))
     st.title(t("access_title"))
     st.write(t("access_description"))
     left, right = st.columns([1.15,1], gap="large")
     with left, st.container(border=True,key="card_access"):
-        mode = st.segmented_control(t("navigation"), ["sign_in","create_account","forgot_password"],
+        mode = 'sign_in' if management_only else st.segmented_control(t("navigation"), ["sign_in","create_account","forgot_password"],
                                     default="sign_in", required=True, format_func=t, key="access_mode")
         with st.form("auth_form"):
             username = st.text_input(t("username"),key="signup_username",max_chars=32,help=t("username_hint")).strip() if mode == "create_account" else ""
@@ -199,7 +202,8 @@ def render_auth_screen():
             except Exception:
                 st.error(t("login_failed" if mode == "sign_in" else "signup_failed" if mode == "create_account" else "auth_unavailable"))
     with right:
-        render_pending_screen(standalone=True)
+        if not management_only:
+            render_pending_screen(standalone=True)
     st.caption(t("privacy"))
 
 
@@ -276,7 +280,7 @@ def render_upload_ui():
     st.caption(t("upload_hint"))
     st.caption(t("combined_hint"))
     uploaded={}
-    icons=dict(zip(CATEGORIES,("badge","description","article","hotel","flight","health_and_safety","work","map","account_balance","folder")))
+    icons=dict(zip(CATEGORIES,("badge","description","article","hotel","flight","health_and_safety","work","map","account_balance","event","folder")))
     order=current_category_order()
     for offset in range(0, len(order),3):
         columns=st.columns(3)
@@ -286,6 +290,7 @@ def render_upload_ui():
             with columns[index % 3], st.container(border=True, key=("slot_filled_" if previous else "slot_empty_")+category):
                 st.markdown(f':material/{icons[category]}: **{t("doc_"+category)}**')
                 if category=='bank_statement':st.caption(t('bank_scope'))
+                if category=='appointment':st.caption(t('appointment_hint'))
                 files=st.file_uploader(t("doc_"+category),type=["pdf","jpg","jpeg","png","webp"],
                                        accept_multiple_files=True,key=widget_key,max_upload_size=20,label_visibility="collapsed")
                 if files:
@@ -364,6 +369,7 @@ def run_review(uploaded_files,model_id,client_name,force_refresh=False):
         _refresh_actor()
         client=get_auth_client(); session=st.session_state.supabase_session
         accounts.verified_actor(client,session)
+        accounts.ensure_service_available()
         if key in cache and not force_refresh:
             result=cache[key][1].copy()
             st.info(t("cached"))
@@ -374,7 +380,7 @@ def run_review(uploaded_files,model_id,client_name,force_refresh=False):
             def update(step):
                 with progress.container():
                     render_pipeline_stepper(step)
-            router=accounts.model_router(client,session)
+            router=accounts.model_router(client,session,review_id=attempt_id)
             result=review_documents(setting("GEMINI_API_KEY"),uploaded_files,model_id,st.session_state.lang,update,router=router)
             if len(cache)>=3:
                 cache.pop(next(iter(cache)))
@@ -383,6 +389,7 @@ def run_review(uploaded_files,model_id,client_name,force_refresh=False):
         # Refresh again after a long model call, then verify approval before showing evidence.
         _refresh_actor()
         accounts.verified_actor(client,st.session_state.supabase_session)
+        accounts.ensure_service_available()
         st.session_state.review_result=result
         attempt_score=result["score"].score
         if attempt_id:
@@ -708,6 +715,36 @@ def render_admin_dashboard():
                                 (len(rows),pending,f'{sum(r["latest_score"] for r in rows if isinstance(r["latest_score"],(int,float)))/len(rows):.0f}%' if rows else "—")):
         column.metric(t(key),value,border=True)
     st.caption(t("log_scope",count=len(rows)))
+    sections=['admin_reviews','admin_access','admin_uploads','admin_models','admin_costs','admin_team_log','admin_maintenance']
+    section=st.selectbox(t('admin_section'),sections,format_func=lambda key,lang=st.session_state.lang:t(key,lang),key='admin_section')
+    st.divider()
+    is_super=st.session_state.actor.role=='super_admin'
+    if section=='admin_reviews':
+        st.subheader(t('admin_reviews'))
+        render_review_controls(client,session,is_super)
+        st.caption(t('attempts_hint'))
+        render_logs(attempts,team=True,key_prefix='overview_attempts')
+    elif section=='admin_access':
+        render_access_management(client,session,profiles)
+    elif section=='admin_team_log':
+        st.subheader(t('admin_team_log'))
+        render_logs(rows,team=True)
+        with st.expander(t('attempts')):
+            st.caption(t('attempts_hint'))
+            render_logs(attempts,team=True,key_prefix='attempts')
+    elif not is_super:
+        st.info(t('super_admin_section'))
+    elif section=='admin_uploads':
+        render_category_order_editor(client,session)
+    elif section=='admin_models':
+        render_model_dashboard(client,session)
+    elif section=='admin_costs':
+        render_cost_dashboard(client,session)
+    elif section=='admin_maintenance':
+        render_maintenance_controls(client,session)
+
+
+def render_access_management(client,session,profiles):
     st.subheader(t("approval_queue"))
     for profile in sorted(profiles,key=lambda p:bool(p.get("is_approved"))):
         with st.container(border=True,key="card_profile_"+profile["id"]):
@@ -741,14 +778,33 @@ def render_admin_dashboard():
                                 st.session_state.notice="access_updated"; st.rerun()
                             except AccountError as exc:
                                 st.error(t(str(exc)))
-    if st.session_state.actor.role=="super_admin":
-        render_category_order_editor(client,session)
-        render_model_dashboard(client,session)
-    st.subheader(t("review_log"))
-    render_logs(rows,team=True)
-    with st.expander(t("attempts")):
-        st.caption(t("attempts_hint"))
-        render_logs(attempts,team=True,key_prefix="attempts")
+
+
+def render_review_controls(client,session,is_super):
+    try:
+        controls=accounts.service_controls()
+        st.info(t('reviews_open' if controls['reviews_enabled'] else 'reviews_closed'))
+        if is_super:
+            with st.form('review_controls'):
+                enabled=st.checkbox(t('reviews_enabled'),value=controls['reviews_enabled'])
+                if st.form_submit_button(t('save_changes')):
+                    accounts.set_reviews_enabled(client,session,enabled)
+                    st.rerun()
+    except Exception:
+        st.error(t('service_unavailable'))
+
+
+def render_maintenance_controls(client,session):
+    st.subheader(t('admin_maintenance'))
+    st.caption(t('maintenance_hint'))
+    try:
+        active=accounts.service_controls()['maintenance_enabled']
+        st.warning(t('maintenance_message')) if active else st.success(t('website_live'))
+        if st.button(t('resume_website' if active else 'pause_website'),type='primary',icon=':material/build:',key='maintenance_switch'):
+            accounts.set_maintenance(client,session,not active)
+            st.rerun()
+    except Exception:
+        st.error(t('access_update_failed'))
 
 
 def render_category_order_editor(client,session):
@@ -816,14 +872,6 @@ def render_model_dashboard(client,session):
     st.caption(t("quota_note"))
     reset=datetime.fromisoformat(snapshot["day_resets_at"]).astimezone(ZoneInfo("Africa/Cairo"))
     st.caption(t("quota_reset",date=reset.strftime("%Y-%m-%d %H:%M")))
-    with st.form("app_controls"):
-        enabled=st.checkbox(t("reviews_enabled"),value=snapshot["reviews_enabled"])
-        if st.form_submit_button(t("save_changes")):
-            try:
-                accounts.set_reviews_enabled(client,session,enabled)
-                st.session_state.notice="access_updated"; st.rerun()
-            except Exception:
-                st.error(t("access_update_failed"))
     for model in snapshot["models"]:
         with st.container(border=True):
             st.markdown("**"+model["model"]+"**")
@@ -854,6 +902,92 @@ def render_model_dashboard(client,session):
         st.dataframe(snapshot["audit"],hide_index=True)
 
 
+@st.fragment(run_every='15s')
+def maintenance_refresh():
+    try:
+        if not accounts.service_controls()['maintenance_enabled']:
+            st.rerun()
+    except AccountError:
+        pass
+
+
+def render_maintenance_page():
+    st.title(t('maintenance_title'))
+    st.info(t('maintenance_message'))
+    maintenance_refresh()
+    if st.button(t('check_service'),key='check_service'):
+        st.rerun()
+
+
+def render_cost_dashboard(client,session):
+    from billing import summarize_costs
+    st.subheader(t('admin_costs'))
+    st.caption(t('cost_note'))
+    st.link_button(t('pricing_source'),'https://ai.google.dev/gemini-api/docs/pricing')
+    try:
+        settings=accounts.billing_settings(client,session)
+        with st.form('billing_settings'):
+            mode=st.selectbox(t('billing_mode'),['free','paid'],index=['free','paid'].index(settings['billing_mode']),format_func=lambda x:t('billing_'+x))
+            budget=st.number_input(t('monthly_budget'),min_value=0.01,max_value=100000.0,value=float(settings['monthly_budget_usd']),step=5.0)
+            st.caption(t('billing_mode_hint'))
+            if st.form_submit_button(t('save_changes')):
+                accounts.save_billing_settings(client,session,mode,budget)
+                st.rerun()
+        zone=ZoneInfo('Africa/Cairo')
+        today=datetime.now(zone).date()
+        month_start=today.replace(day=1)
+        month_end=(month_start.replace(day=28)+timedelta(days=4)).replace(day=1)
+        dates=st.date_input(t('cost_period'),value=(month_start,today),key='cost_period')
+        if len(dates)!=2:
+            st.info(t('choose_cost_dates')); return
+        start,end=dates
+        if end<start or (end-start).days>366:
+            st.error(t('cost_date_limit')); return
+        beginning=datetime.combine(start,datetime_time.min,zone)
+        ending=datetime.combine(end+timedelta(days=1),datetime_time.min,zone)
+        events=accounts.cost_events(client,session,beginning,ending)
+        summary=summarize_costs(events)
+        monthly=summary if start==month_start and end==today else summarize_costs(accounts.cost_events(client,session,
+            datetime.combine(month_start,datetime_time.min,zone),datetime.combine(month_end,datetime_time.min,zone)))
+        with st.container(horizontal=True):
+            st.metric(t('estimated_paid'),f"${summary['paid']:.4f}",border=True)
+            st.metric(t('projected_paid'),f"${summary['projected']:.4f}",border=True)
+            st.metric(t('cost_requests'),summary['requests'],border=True)
+            st.metric(t('unknown_cost'),summary['unknown'],border=True)
+        budget=float(settings['monthly_budget_usd'])
+        spent=float(monthly['paid'])
+        st.progress(min(1.0,spent/budget),text=t('budget_progress',spent=f'{spent:.2f}',budget=f'{budget:.2f}'))
+        st.caption(t('budget_hint'))
+        if spent>=budget:
+            st.warning(t('budget_reached'))
+        if summary['unknown']:
+            st.warning(t('cost_incomplete'))
+        if not events:
+            st.info(t('no_cost_events')); return
+        daily=[{t('date'):day,t('estimated_paid'):float(values['paid']),t('projected_paid'):float(values['projected'])}
+               for day,values in summary['daily'].items()]
+        if daily:
+            st.line_chart(daily,x=t('date'),y=[t('estimated_paid'),t('projected_paid')])
+        st.subheader(t('cost_by_model'))
+        st.dataframe([{t('model'):model,t('cost_requests'):row['requests'],t('estimated_paid'):float(row['paid']),
+                       t('projected_paid'):float(row['projected']),t('unknown_cost'):row['unknown']}
+                      for model,row in summary['models'].items()],hide_index=True)
+        st.subheader(t('cost_by_review'))
+        attempts={row['request_id']:row for row in accounts.team_attempts(client,session) if row.get('request_id')}
+        # The full reference is retained for reconciliation; no document content is stored.
+        st.dataframe([{t('review_reference'):reference,t('client_name'):attempts.get(reference,{}).get('client_name') or '—',
+                       t('agent'):attempts.get(reference,{}).get('submitted_username') or '—',t('cost_requests'):row['requests'],
+                       t('estimated_paid'):float(row['paid']),t('projected_paid'):float(row['projected']),t('unknown_cost'):row['unknown']}
+                      for reference,row in summary['reviews'].items()],hide_index=True)
+        buffer=StringIO()
+        columns=['created_at','review_id','model','status','billing_mode','input_tokens','cached_input_tokens','output_tokens',
+                 'input_usd_per_million','cached_usd_per_million','output_usd_per_million','estimated_paid_usd','projected_usd']
+        writer=csv.DictWriter(buffer,fieldnames=columns,extrasaction='ignore'); writer.writeheader();writer.writerows(summary['details'])
+        st.download_button(t('download_costs'),buffer.getvalue().encode('utf-8-sig'),file_name='review-costs.csv',mime='text/csv')
+    except Exception:
+        st.error(t('cost_load_failed'))
+
+
 def render_how_it_works():
     st.title(t("how")); st.write(t("how_description"))
     for step,key in zip(("step_read","step_rules","step_business","step_score"),("how_read","how_rules","how_business","how_score")):
@@ -867,12 +1001,24 @@ def main():
     render_header()
     if not all(setting(key) for key in ("SUPABASE_URL","SUPABASE_ANON_KEY","SUPABASE_SERVICE_ROLE_KEY")):
         st.error(t("config_missing")); return
-    if handle_recovery(): return
+    try:
+        controls=accounts.service_controls()
+    except AccountError:
+        st.error(t('service_unavailable')); return
+    maintenance=controls['maintenance_enabled']
+    st.session_state.maintenance_active=maintenance
+    if not maintenance and handle_recovery(): return
     _restore_session_from_params()
     notice=st.session_state.pop("notice",None)
     if notice: st.info(t(notice))
     if not st.session_state.supabase_session:
-        render_auth_screen(); return
+        if maintenance:
+            render_maintenance_page()
+            with st.expander(t('management_sign_in')):
+                render_auth_screen(management_only=True)
+        else:
+            render_auth_screen()
+        return
     try:
         actor=_refresh_actor()
     except AccountError as exc:
@@ -880,6 +1026,17 @@ def main():
             _clear_local_session("session_expired"); st.rerun()
         st.error(t(str(exc))); return
     session_watchdog()
+    if maintenance:
+        st.session_state.review_result=None
+        st.session_state.review_cache={}
+        if not (actor.approved and actor.role=='super_admin'):
+            render_maintenance_page()
+            if st.button(t('sign_out')):
+                _supabase_sign_out(); st.rerun()
+            return
+        st.warning(t('maintenance_message'))
+        render_admin_dashboard()
+        return
     if not actor.approved:
         st.session_state.review_result=None
         st.session_state.review_cache={}

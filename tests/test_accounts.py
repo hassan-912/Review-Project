@@ -50,6 +50,7 @@ def test_non_admin_cannot_approve(monkeypatch):
 
 @pytest.mark.parametrize('allowed',[False,None])
 def test_quota_denial_fails_closed(monkeypatch,allowed):
+    monkeypatch.setattr(accounts,'ensure_service_available',lambda:None)
     monkeypatch.setattr(accounts,'verified_actor',lambda *args,**kw:accounts.Actor('id','test@example.com',True,'user'))
     database=Mock();database.rpc.return_value.execute.return_value.data=allowed
     monkeypatch.setattr(accounts,'admin_client',lambda:database)
@@ -57,6 +58,7 @@ def test_quota_denial_fails_closed(monkeypatch,allowed):
 
 
 def test_quota_service_error_fails_closed(monkeypatch):
+    monkeypatch.setattr(accounts,'ensure_service_available',lambda:None)
     monkeypatch.setattr(accounts,'verified_actor',lambda *args,**kw:accounts.Actor('id','test@example.com',True,'user'))
     monkeypatch.setattr(accounts,'admin_client',Mock(side_effect=RuntimeError()))
     with pytest.raises(AccountError,match='quota_unavailable'):accounts.reserve_review(Mock(),object())

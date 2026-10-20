@@ -19,6 +19,8 @@ def review_documents(api_key, uploaded_files, model_id="auto", lang="en", progre
             progress(number)
     step(1)
     extraction = extract_documents(api_key, uploaded_files, model_id=model_id, lang=lang,router=router)
+    from appointment_review import ground_appointments
+    ground_appointments(extraction, uploaded_files)
     grounded_financial_data(extraction,uploaded_files)
     source_issues = (printed_form_checks(extraction, uploaded_files) + translation_date_checks(uploaded_files)
                      + reservation_and_title_checks(extraction, uploaded_files))
