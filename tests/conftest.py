@@ -5,6 +5,15 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from extractor import VisaDocumentExtraction
 
 
+@pytest.fixture(autouse=True)
+def disable_live_error_reporting(monkeypatch):
+    # Tests must never submit events to the real monitoring project.
+    import monitoring
+    monkeypatch.setattr(monitoring,'setting',lambda name,default='': '' if name=='SENTRY_DSN' else default)
+    import offline_ocr
+    monkeypatch.setattr(offline_ocr,'start_ocr_warmup',lambda:None)
+
+
 @pytest.fixture
 def complete_extraction():
     return VisaDocumentExtraction.model_validate({

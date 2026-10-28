@@ -11,7 +11,6 @@ from extractor import (PassportInfo, NarrativeSection, TravelDay, SourceField, I
     SupportingDocument, SupportingClaim, DocumentAudit, _extract_pdf_text, _parse_response)
 from validator import (_check_employment_leave_dates, _check_date_alignment, _names_match,
     name_issue, Severity, ValidationIssue)
-from model_routing import generate_automatically, FREE_MODELS, ModelUnavailable
 from evidence import attach_evidence, render_source
 from supporting_review import check_supporting, extraction_quality
 import accounts
@@ -165,26 +164,12 @@ def test_arabic_pdf_keeps_labels_and_iso_dates(complete_extraction):
         assert label in text or label[::-1] in text
 
 
-def test_automatic_routing_skips_quota_retries_and_validates_json():
-    client=Mock()
-    client.models.generate_content.side_effect=[RuntimeError('429 RESOURCE_EXHAUSTED'),SimpleNamespace(text='not json'),SimpleNamespace(text='{}')]
-    used=[]
-    assert generate_automatically(client,[],object(),validate=_parse_response,model_callback=used.append)=='{}'
-    assert used==[FREE_MODELS[2]]
-    assert [call.kwargs['model'] for call in client.models.generate_content.call_args_list]==list(FREE_MODELS[:3])
 
 
-def test_no_quota_means_no_generation_and_no_paid_fallback():
-    client=Mock();client.models.count_tokens.return_value.total_tokens=25
-    router=Mock();router.models=list(FREE_MODELS);router.reserve.return_value=None
-    with pytest.raises(ModelUnavailable):
-        generate_automatically(client,[],SimpleNamespace(system_instruction='Extract'),router=router)
-    client.models.generate_content.assert_not_called()
-    assert router.reserve.call_count==4
 
 
 @pytest.mark.parametrize('function,args',[(accounts.super_update,('00000000-0000-0000-0000-000000000001','super_admin',True,5,20)),
-    (accounts.configure_model,(FREE_MODELS[0],True,1,5,250000,20)),(accounts.set_reviews_enabled,(False,)),(accounts.model_dashboard,())])
+    (accounts.set_reviews_enabled,(False,))])
 def test_super_admin_operations_require_live_authorization(monkeypatch,function,args):
     verified=Mock(side_effect=accounts.AccountError('access_revoked'));monkeypatch.setattr(accounts,'verified_actor',verified)
     database=Mock();monkeypatch.setattr(accounts,'admin_client',database)

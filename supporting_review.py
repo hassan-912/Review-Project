@@ -15,7 +15,7 @@ def check_supporting(data,uploaded_files=None):
     references={"full_name":data.passport.full_name,"passport_number":data.passport.passport_number,
         "date_of_birth":data.passport.date_of_birth,"employer_name":data.employment.employer_name,
         "job_title":data.employment.job_title,"passport_issue":data.passport.passport_issue,"passport_expiry":data.passport.passport_expiry,
-        "national_id_number":data.national_id.id_number,"national_id_issue":data.national_id.issue_date,"national_id_expiry":data.national_id.expiry_date,
+        "national_id_number":data.passport.national_id_number or data.national_id.id_number,"national_id_issue":data.national_id.issue_date,"national_id_expiry":data.national_id.expiry_date,
         "approved_leave_start":data.employment.approved_leave_start,"approved_leave_end":data.employment.approved_leave_end,
         "intended_arrival":data.visa_form.intended_arrival,"intended_departure":data.visa_form.intended_departure}
     files={name:raw for group in (uploaded_files or {}).values() for name,raw in group}
@@ -80,6 +80,9 @@ def check_supporting(data,uploaded_files=None):
                 if claim.field_name=="date_of_birth" or claim.field_name.endswith(("issue","expiry","start","end","arrival","departure")):
                     a,b=_parse_date(reference),_parse_date(claim.value)
                     match=a is not None and b is not None and a==b
+                elif claim.field_name=='national_id_number':
+                    from passport_template_extractor import normalize_identifier
+                    match=normalize_identifier(reference)==normalize_identifier(claim.value)
                 else:
                     match=_normal(reference)==_normal(claim.value)
                 claim.assessment="consistent" if match else "conflicts"

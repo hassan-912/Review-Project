@@ -1,0 +1,14 @@
+# Local document OCR used by the website and CLI; included by requirements.in.
+rapidocr-onnxruntime==1.4.4
+onnxruntime==1.31.0
+opencv-python==5.0.0.93
+pyclipper==1.4.0
+Shapely==2.2.0
+PyYAML==6.0.3
+tqdm==4.70.1
+flatbuffers==25.12.19
+# Local Arabic reader for HR and the passport civil-ID field; first setup downloads public OCR weights only.
+rapidocr==3.9.2
+python-bidi==0.6.7
+omegaconf==2.4.0
+colorlog==6.12.0

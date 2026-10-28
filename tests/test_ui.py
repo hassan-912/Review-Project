@@ -27,24 +27,65 @@ app.render_category_order_editor(object(),object())
     assert set(saved)==set(CATEGORIES)
 
 
-def test_bank_upload_thumbnail_is_visible():
+def test_uploaded_bank_file_has_no_thumbnail(monkeypatch):
+    import streamlit as st
     import pymupdf
     with pymupdf.open() as doc:
         doc.new_page().insert_text((50,60),'First page')
         doc.new_page().insert_text((50,60),'Final available balance EUR 5000')
-        raw=doc.tobytes().hex()
-    app=AppTest.from_string(f'''
-import app
+        raw=doc.tobytes()
+    upload=SimpleNamespace(name='bank.pdf',getvalue=lambda:raw)
+    monkeypatch.setattr(st,'file_uploader',lambda *a,**kw:[upload] if kw['key'].endswith('bank_statement') else [])
+    app=AppTest.from_string('''
+import app,streamlit as st
 app._init_session_state()
-app.render_upload_thumbnails([('bank.pdf',bytes.fromhex('{raw}'))],'bank_statement')
+st.session_state.upload_result=app.render_upload_ui()
 ''',default_timeout=30).run()
     assert not app.exception
-    assert len(app.get('image'))==1
-    assert any('Page 2 of 2' in item.value for item in app.caption)
+    assert not app.get('image')
+    assert app.session_state.upload_result[0]['bank_statement'][0][0]=='bank.pdf'
 
 
 @pytest.mark.parametrize('lang',['en','ar'])
-def test_non_scoring_id_reference_note_is_visible(complete_extraction,lang):
+def test_spain_shows_separate_id_translation_and_bank_declaration_upload_cards(lang):
+    ui=AppTest.from_string('''
+import app
+app._init_session_state()
+app.render_upload_ui()
+''',default_timeout=30)
+    ui.session_state.lang=lang;ui.run()
+    labels=[uploader.proto.label for uploader in ui.get('file_uploader')]
+    assert not ui.exception
+    assert t('doc_national_id_translation',lang) in labels
+    assert t('doc_bank_declaration',lang) in labels
+    assert labels.index(t('doc_bank_declaration',lang))!=labels.index(t('doc_bank_statement',lang))
+    ui.selectbox(key='schengen_country').set_value('france').run()
+    labels=[uploader.proto.label for uploader in ui.get('file_uploader')]
+    assert not ui.exception and len(labels)==11
+    assert t('doc_national_id_translation',lang) not in labels
+    assert t('doc_bank_declaration',lang) not in labels
+    assert any(caption.value==t('combined_hint_schengen',lang) for caption in ui.caption)
+
+
+def test_dedicated_spain_uploads_and_general_supporting_files_are_all_retained(monkeypatch):
+    import streamlit as st
+    files={slot:SimpleNamespace(name=name,getvalue=lambda: b'local upload bytes') for slot,name in
+           [('national_id_translation','id-translation.pdf'),('bank_declaration','declaration.pdf'),
+            ('supporting','other.pdf')]}
+    monkeypatch.setattr(st,'file_uploader',lambda *a,**kw:
+        [files[kw['key'].removeprefix('upload_0_')]] if kw['key'].removeprefix('upload_0_') in files else [])
+    ui=AppTest.from_string('''
+import app,streamlit as st
+app._init_session_state()
+st.session_state.upload_result=app.render_upload_ui()
+''',default_timeout=30).run()
+    assert not ui.exception
+    uploaded=ui.session_state.upload_result[0]
+    assert {name for name,_ in uploaded['supporting']}=={'id-translation.pdf','declaration.pdf','other.pdf'}
+
+
+@pytest.mark.parametrize('lang',['en','ar'])
+def test_non_scoring_id_note_does_not_appear_as_a_correction(complete_extraction,lang):
     from extractor import IdentityEvidence
     from validator import run_validation
     from scorer import calculate_score
@@ -64,7 +105,8 @@ app.render_report(st.session_state.test_result)
     ui.session_state.test_result=result
     ui.run()
     assert not ui.exception
-    assert any('30001011234567' in item.value for item in ui.info)
+    assert not any('30001011234567' in item.value for item in ui.info)
+    assert not ui.warning
     assert result['score'].score==100 and not result['score'].provisional
 
 
@@ -76,6 +118,8 @@ def no_browser_recovery_token(monkeypatch):
     monkeypatch.setattr(accounts,'service_controls',lambda:dict(maintenance_enabled=False,reviews_enabled=True))
     import recovery
     monkeypatch.setattr(recovery,"recovery_tokens",lambda:None)
+    import session_resume
+    monkeypatch.setattr(session_resume,'browser_state',lambda *args,**kw:dict(ready=True,handle=None))
 
 
 @pytest.mark.parametrize('lang',['en','ar'])
@@ -107,8 +151,8 @@ def test_approved_pages_are_bilingual(monkeypatch,lang,page):
     assert not app.exception
     assert app.title[0].value==t('review_title' if page=='review' else page,lang)
     if page=='review':
-        from uploads import CATEGORIES
-        assert len(app.get('file_uploader'))==len(CATEGORIES)
+        from uploads import upload_slot_order
+        assert len(app.get('file_uploader'))==len(upload_slot_order())
 
 
 def test_failed_legacy_restore_clears_url_and_explains(monkeypatch):
@@ -180,7 +224,8 @@ ui['render_report'](st.session_state.test_result)
     app.run()
     assert not app.exception
     assert not app.warning
-    assert any(s.value==t('summary',lang) for s in app.subheader)
+    assert any(s.value==t('corrections_title',lang,count=len(issues)) for s in app.subheader)
+    assert not any(s.value==t('summary',lang) for s in app.subheader)
     assert len(app.get('download_button'))==1
 
 
@@ -201,24 +246,17 @@ def test_super_admin_dashboard_and_controls(monkeypatch,lang):
     monkeypatch.setattr(accounts,'team_profiles',lambda *a,**kw:[dict(id=actor.user_id,email=actor.email,username=actor.username,
         is_approved=True,role='super_admin',hourly_limit=5,daily_limit=20)])
     monkeypatch.setattr(accounts,'team_attempts',lambda *a,**kw:[])
-    from model_routing import FREE_MODELS
-    models=[dict(model=name,priority=index+1,enabled=True,rpm=5,tpm=250000,rpd=20,requests_today=2,requests_minute=0,
-        tokens_minute=0,input_tokens_today=50,output_tokens_today=40,errors_today=1,pending_today=0,
-        quota_source='AI Studio Free tier',quota_checked_at='2026-10-16T00:00:00Z',cooldown_until=None) for index,name in enumerate(FREE_MODELS)]
-    monkeypatch.setattr(accounts,'model_dashboard',lambda *a,**kw:dict(day_resets_at='2026-10-17T07:00:00Z',reviews_enabled=True,models=models,audit=[]))
     app=AppTest.from_file(APP_PATH,default_timeout=30)
     app.session_state.lang=lang;app.session_state.auth_client=object()
     app.session_state.supabase_session=SimpleNamespace(expires_at=time.time()+1000,access_token='test',refresh_token='test')
     app.session_state.current_page='admin';app.run()
     assert not app.exception
     assert any(c.label==t('reviews_enabled',lang) for c in app.checkbox)
-    app.selectbox(key='admin_section').select('admin_models').run()
-    assert not app.exception
-    assert len([m for m in app.metric if m.label==t('remaining_today',lang) and m.value=='18'])==4
-    assert any(t('quota_note',lang)==c.value for c in app.caption)
+    assert t('admin_costs',lang) in app.selectbox(key='admin_section').options
+    assert 'admin_models' not in app.selectbox(key='admin_section').options
 
 
-def test_evidence_renders_real_source_left_and_reference_right(complete_extraction):
+def test_corrections_show_error_and_reference_crops_with_prominent_document_names(complete_extraction):
     from tests.test_production_review import pdf_bytes
     from extractor import SourceField
     from validator import ValidationIssue,Severity
@@ -242,30 +280,15 @@ ui['render_fix_checklist'](st.session_state.test_result['issues'],st.session_sta
     app.session_state['evidence_report_0']=True
     app.run()
     assert not app.exception
-    assert len(app.session_state.test_result.get('evidence_images',{}))==2
+    assert not app.session_state.test_result.get('evidence_images')
     assert len(app.get('image'))==2
+    assert app.session_state.test_result.get('reference_images_v1')
+    assert any(item.value=='Flight Reservation' for item in app.subheader)
+    assert app.session_state.test_result.get('correction_images_v3')
+    assert any('flight.pdf' in item.value for item in app.text)
+    assert any('passport.pdf' in item.value for item in app.text)
 
 
-@pytest.mark.parametrize('lang',['en','ar'])
-def test_cost_dashboard_tracks_free_and_paid_and_exports(monkeypatch,lang):
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
-    from tests.test_admin_and_appointments import cost_event
-    now=datetime.now(ZoneInfo('Africa/Cairo')).isoformat()
-    monkeypatch.setattr(accounts,'billing_settings',lambda *a:dict(billing_mode='free',monthly_budget_usd=25))
-    monkeypatch.setattr(accounts,'cost_events',lambda *a:[cost_event(created_at=now),cost_event(id='free',billing_mode='free',created_at=now)])
-    monkeypatch.setattr(accounts,'team_attempts',lambda *a:[])
-    ui=AppTest.from_string('''
-import app,streamlit as st
-app._init_session_state()
-app.render_cost_dashboard(object(),object())
-''',default_timeout=30)
-    ui.session_state.lang=lang;ui.run()
-    assert not ui.exception and not ui.error
-    assert next(m for m in ui.metric if m.label==t('estimated_paid',lang)).value=='$0.0412'
-    assert next(m for m in ui.metric if m.label==t('projected_paid',lang)).value=='$0.0825'
-    assert len(ui.get('download_button'))==1
-    assert len(ui.dataframe)==2
 
 
 @pytest.mark.parametrize('role',['user','admin','super_admin'])
@@ -322,3 +345,165 @@ def test_maintenance_guest_has_only_management_sign_in(monkeypatch):
     assert ui.title[0].value==t('maintenance_title','en')
     assert not ui.get('file_uploader') and not ui.get('segmented_control')
     assert not any(button.label==t('create_account','en') for button in ui.button)
+
+
+@pytest.mark.parametrize('lang',['en','ar'])
+def test_destination_navigation_starts_with_spain_and_blocks_pending_programs(monkeypatch,lang):
+    from uploads import upload_slot_order
+    ui=AppTest.from_string('''
+import app,streamlit as st
+app._init_session_state()
+app.render_upload_ui()
+''',default_timeout=30)
+    ui.session_state.lang=lang;ui.run()
+    assert not ui.exception
+    assert ui.session_state.visa_program=='schengen' and ui.session_state.schengen_country=='spain'
+    assert len(ui.get('file_uploader'))==len(upload_slot_order())
+    ui.session_state.review_result={'old':'report'}
+    ui.segmented_control(key='visa_program').set_value('canada').run()
+    assert not ui.exception and not ui.get('file_uploader')
+    assert ui.session_state.review_result is None
+    assert any(t('under_processing',lang) in option for option in ui.segmented_control(key='visa_program').options)
+    assert any(t('program_canada',lang) in note.value for note in ui.info)
+
+
+@pytest.mark.parametrize('program,country',[('canada','spain'),('uk','spain')])
+def test_unavailable_program_cannot_start_a_review(monkeypatch,program,country):
+    from unittest.mock import Mock
+    reserve=Mock();monkeypatch.setattr(accounts,'reserve_review',reserve)
+    ui=AppTest.from_string('''
+import app,streamlit as st
+app._init_session_state()
+app.render_upload_ui()
+app.run_review({},'Test')
+''',default_timeout=30)
+    ui.session_state.visa_program=program;ui.session_state.schengen_country=country;ui.run()
+    assert not ui.exception and not ui.get('file_uploader')
+    reserve.assert_not_called()
+
+
+def test_review_cache_identity_includes_destination():
+    ui=AppTest.from_string('''
+import app,streamlit as st
+app._init_session_state()
+st.session_state.visa_program='schengen'
+st.session_state.schengen_country='spain'
+first=app._compute_upload_hash({})
+st.session_state.schengen_country='france'
+st.session_state.hashes_differ=first != app._compute_upload_hash({})
+''',default_timeout=30).run()
+    assert not ui.exception and ui.session_state.hashes_differ
+
+
+def test_document_only_review_does_not_require_key_or_reserve_model_usage(monkeypatch,complete_extraction):
+    from unittest.mock import Mock
+    import app as module
+    from scorer import calculate_score
+    from business_checker import check_business_alignment
+    from tests.test_local_review_pipeline import pdf
+    actor=accounts.Actor('00000000-0000-0000-0000-000000000001','test@example.com',True,'user')
+    monkeypatch.setattr(accounts,'verified_actor',lambda *a,**kw:actor)
+    monkeypatch.setattr(accounts,'refresh_if_needed',lambda client,session:session)
+    monkeypatch.setattr(accounts,'ensure_service_available',lambda:None)
+    for name in ('reserve_review','finish_attempt','log_review'):monkeypatch.setattr(accounts,name,Mock())
+    result=dict(extraction=complete_extraction,score=calculate_score([]),issues=[],
+                biz_result=check_business_alignment(complete_extraction),writing={})
+    review=Mock(return_value=result);monkeypatch.setattr(module,'review_documents',review)
+    ui=AppTest.from_string('''
+import app,streamlit as st
+app._init_session_state()
+app.run_review(st.session_state.test_uploads,'Synthetic applicant')
+''',default_timeout=30)
+    ui.session_state.auth_client=object()
+    ui.session_state.supabase_session=SimpleNamespace(expires_at=time.time()+1000,access_token='test',refresh_token='test')
+    ui.session_state.test_uploads={'visa_form':[('synthetic.pdf',pdf('Synthetic application sample with unsupported layout.'))]}
+    ui.run()
+    assert not ui.exception and not ui.error
+    assert review.call_args.args[0]==ui.session_state.test_uploads
+    accounts.reserve_review.assert_called_once()
+
+
+@pytest.mark.parametrize('lang',['en','ar'])
+def test_successful_local_values_are_hidden_in_corrections_only_output(complete_extraction,lang):
+    from scorer import calculate_score
+    from business_checker import check_business_alignment
+    complete_extraction.local_results=[dict(source_file='synthetic.pdf',category='visa_form',status='needs_verification',
+        fields=[dict(key='travel_document.number',label='Passport number',value='X00001234',status='extracted',sources=[]),
+                dict(key='occupation.current',label='Occupation',value='Unreadable OCR',status='needs_verification',sources=[])])]
+    result=dict(extraction=complete_extraction,issues=[],score=calculate_score([]),
+                biz_result=check_business_alignment(complete_extraction),writing={},client_name='Synthetic',hash='local-values')
+    ui=AppTest.from_string('''
+import app,streamlit as st
+app._init_session_state()
+app.render_report(st.session_state.test_result)
+''',default_timeout=30)
+    ui.session_state.lang=lang;ui.session_state.test_result=result;ui.run()
+    assert not ui.exception
+    assert not any('X00001234' in item.value for item in ui.text)
+    assert not any(item.value==t('local_field_verify',lang) for item in ui.caption)
+    assert not any(item.label==t('download_receipt',lang) for item in ui.get('download_button'))
+    assert not ui.metric and not ui.get('image')
+
+
+@pytest.mark.parametrize('lang',['en','ar'])
+def test_all_schengen_countries_offer_tourism_and_business_with_business_pending(lang):
+    from app import SCHENGEN_COUNTRIES
+    ui=AppTest.from_string('''
+import app
+app._init_session_state()
+app.render_upload_ui()
+''',default_timeout=30)
+    ui.session_state.lang=lang;ui.run()
+    assert set(SCHENGEN_COUNTRIES)=={'spain','france','germany','italy','netherlands','sweden','belgium','greece'}
+    for country in SCHENGEN_COUNTRIES:
+        ui.selectbox(key='schengen_country').set_value(country).run()
+        assert all(t('under_processing',lang) not in label for label in ui.selectbox(key='schengen_country').options)
+        assert len(ui.get('file_uploader'))==(13 if country=='spain' else 11)
+        assert any(t('schengen_workspace',lang,destination=t('country_'+country,lang))==caption.value for caption in ui.caption)
+        control=ui.segmented_control(key='trip_type')
+        assert any(t('trip_tourism',lang) in label for label in control.options)
+        assert any(t('trip_business',lang) in label and t('under_processing',lang) in label for label in control.options)
+    assert not ui.exception
+
+
+@pytest.mark.parametrize('trip_type',['business','tampered'])
+def test_business_and_invalid_trip_type_cannot_start_a_review(monkeypatch,trip_type):
+    from unittest.mock import Mock
+    reserve=Mock();monkeypatch.setattr(accounts,'reserve_review',reserve)
+    ui=AppTest.from_string('''
+import app
+app._init_session_state()
+app.run_review({},'Synthetic')
+''',default_timeout=30)
+    ui.session_state.trip_type=trip_type;ui.run()
+    assert not ui.exception
+    reserve.assert_not_called()
+
+
+def test_trip_type_changes_the_result_cache_identity():
+    ui=AppTest.from_string('''
+import app,streamlit as st
+app._init_session_state()
+st.session_state.trip_type='tourism'
+first=app._compute_upload_hash({})
+st.session_state.trip_type='business'
+st.session_state.hashes_differ=first!=app._compute_upload_hash({})
+''',default_timeout=30).run()
+    assert not ui.exception and ui.session_state.hashes_differ
+
+
+def test_language_switch_preserves_the_selected_review_scope():
+    ui=AppTest.from_string('''
+import app,streamlit as st
+app._init_session_state()
+app.render_header()
+app.render_upload_ui()
+''',default_timeout=30).run()
+    original=ui.session_state.active_review_scope
+    generation=ui.session_state.upload_generation
+    for lang in ('ar','en'):
+        ui.segmented_control(key='lang').set_value(lang).run()
+        assert not ui.exception
+        assert ui.session_state.active_review_scope==original
+        assert ui.session_state.upload_generation==generation
+        assert ui.get('file_uploader')

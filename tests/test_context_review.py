@@ -6,7 +6,6 @@ import pytest
 import pymupdf
 from extractor import (VisaDocumentExtraction, SupportingDocument, SupportingClaim,
                        DocumentAudit, PassportInfo, NarrativeSection)
-from context_review import CHECKS, parse_context, review_context
 from validator import (run_validation, _check_schengen_destination_rule,
                        _check_employment_leave_dates, _check_missing_fields, ValidationIssue, Severity)
 from supporting_review import check_supporting, extraction_quality
@@ -23,13 +22,6 @@ def pdf(*pages):
         return doc.tobytes()
 
 
-def context_payload(names=('letter.pdf',)):
-    return dict(checks=[{'check':key,'status':'clear','explanation':'Reviewed synthetic source'} for key in CHECKS],
-        document_audits=[dict(source_file=name,document_types=['education'],pages_read=[1],readability='readable',summary='Synthetic university enrollment record') for name in names],
-        applicant_status='student',employment_evidence_present=False,cover_letter_present=False,
-        cover_letter_sources=[],passport_native_name=None,passport_national_id_number=None,findings=[],
-        visa_form={},national_id={},verified_fields=[],
-        cover_letter_recommendations=[],travel_plan_recommendations=[],executive_summary='Synthetic student case')
 
 
 def test_actual_form_destination_is_compared_with_booked_country(complete_extraction):
@@ -168,46 +160,14 @@ def test_context_quotes_and_exact_pages_survive_evidence_attachment(complete_ext
     assert issue.evidence==[dict(source_file='form.pdf',page=2,text='Email address')]
 
 
-def test_context_contract_rejects_omitted_audits_and_false_readable_coverage():
-    payload=context_payload();manifest={'letter.pdf':{'pages':2}}
-    with pytest.raises(ValueError):parse_context(json.dumps(payload),manifest)
-    payload['document_audits'][0]['pages_read']=[1,2]
-    assert parse_context(json.dumps(payload),manifest)
-    payload['document_audits']=[]
-    with pytest.raises(ValueError):parse_context(json.dumps(payload),manifest)
 
 
-def test_context_contract_requires_every_review_criterion():
-    payload=context_payload();payload['checks'].pop()
-    with pytest.raises(ValueError):parse_context(json.dumps(payload),{'letter.pdf':{'pages':1}})
 
 
-def test_context_review_clears_hallucinated_letter_and_hr_for_student(monkeypatch,complete_extraction):
-    monkeypatch.setattr('context_review.generate_automatically',lambda *a,**kw:json.dumps(context_payload()))
-    result=review_context(Mock(),[],{'employment':[('letter.pdf',pdf('Synthetic university enrollment'))]},complete_extraction)
-    assert result.cover_letter.purpose_of_visit is None and not result.cover_letter_text.present
-    assert result.employment.evidence_type=='education'
-    assert not _check_employment_leave_dates(result)
 
 
-def test_context_unavailability_makes_result_provisional_without_zeroing_score(monkeypatch,complete_extraction):
-    from model_routing import ModelUnavailable
-    def unavailable(*args,**kwargs):raise ModelUnavailable('models_unavailable')
-    monkeypatch.setattr('context_review.generate_automatically',unavailable)
-    result=review_context(Mock(),[],{'supporting':[('letter.pdf',pdf('Synthetic source'))]},complete_extraction)
-    assert result.review_limitations
-    _,issues=extraction_quality(result,{})
-    assert calculate_score(issues).provisional and calculate_score(issues).score==100
 
 
-def test_context_with_fabricated_quote_is_withheld(monkeypatch,complete_extraction):
-    payload=context_payload()
-    payload['findings']=[dict(document='Supporting Documents',field_name='translation_title',severity='LOW',
-        title='Wrong honorific',found='Ms',expected='Mr',fix='Correct title',
-        sources=[dict(source_file='letter.pdf',page=1,text='Fabricated quotation')],references=[])]
-    monkeypatch.setattr('context_review.generate_automatically',lambda *a,**kw:json.dumps(payload))
-    result=review_context(Mock(),[],{'supporting':[('letter.pdf',pdf('Actual synthetic source'))]},complete_extraction)
-    assert result.contextual_findings==[] and result.unverified_findings
 
 
 def test_actual_form_table_blanks_and_country_are_read_independently(complete_extraction):
@@ -247,12 +207,6 @@ def test_quote_punctuation_changes_do_not_hide_an_actual_field_label():
         {'visa_form':[('form.pdf',pdf('Telephone number(s)'))]})
 
 
-def test_context_hold_cannot_create_a_scored_finding(complete_extraction):
-    from context_review import context_issues
-    complete_extraction.contextual_findings=[dict(document='flight',field_name='reservation_validity',severity='MEDIUM',
-        title='Payment hold needs rechecking',found='On hold',expected='Current validity',fix='Obtain a fresh reservation',
-        sources=[dict(source_file='flight.pdf',page=1,text='On hold')],references=[])]
-    assert not context_issues(complete_extraction)
 
 
 def test_flight_day_recommendations_use_final_arrival_and_return_departure(complete_extraction):

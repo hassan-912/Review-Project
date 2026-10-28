@@ -11,7 +11,8 @@ def unique_uploads(uploaded):
     result, seen = {}, set()
     names = Counter(name for group in uploaded.values() for name, _ in group)
     # Stable precedence makes drag/display order unable to change document meaning.
-    for category, group in sorted(uploaded.items(),key=lambda item:(item[0]!='bank_statement',item[0])):
+    # A factual document also placed in a narrative slot must stay local.
+    for category, group in sorted(uploaded.items(),key=lambda item:(item[0] in {'cover_letter','travel_plan'},item[0]!='bank_statement',item[0])):
         for name, raw in group:
             digest = sha256(raw).hexdigest()
             if digest in seen:
@@ -54,6 +55,10 @@ def source_is_grounded(source, uploaded):
     with pymupdf.open(stream=matches[0], filetype='pdf') as pdf:
         if page > len(pdf):
             return False
-        text = pdf[page - 1].get_text()
+        original=pdf[page-1]
+        text = original.get_text()
+        for annotation in original.annots() or []:
+            if annotation.type[1]=='FreeText' and not annotation.flags & (1|2|32):
+                text+='\n'+annotation.get_text()
         # Scans rely on visual transcription; show the actual page to the reviewer.
         return len(text.strip()) < 20 or normalized_quote(quote) in normalized_quote(text)

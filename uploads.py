@@ -7,12 +7,15 @@ from pathlib import PurePath
 import pymupdf as fitz
 from PIL import Image
 from io import BytesIO
+from document_ingestion import UPLOAD_EXTENSIONS,TEXT_EXTENSIONS,native_text
 
 CATEGORIES = (
     "passport", "visa_form", "cover_letter", "hotel", "flight",
     "insurance", "employment", "travel_plan", "bank_statement", "appointment", "supporting",
 )
-SCHEMA_VERSION = "review-v8-appointment-buffer"
+SCHEMA_VERSION = "review-v11-multiformat-financial"
+SPAIN_UPLOAD_SLOTS = ("national_id_translation", "bank_declaration")
+USA_CATEGORIES = ('ds160','hotel','passport','client_form')
 
 
 def category_order(order=None):
@@ -21,9 +24,28 @@ def category_order(order=None):
     return known+[x for x in CATEGORIES if x not in known]
 
 
+def upload_slot_order(order=None,program='schengen',country='spain'):
+    """Add Spain's dedicated form slots without changing saved shared category IDs."""
+    if program=='usa':return list(USA_CATEGORIES)
+    slots=category_order(order)
+    if program=='schengen' and country=='spain':
+        position=slots.index('visa_form')+1
+        slots[position:position]=SPAIN_UPLOAD_SLOTS
+    return slots
+
+
+def upload_slot_category(slot):
+    """Dedicated Spain form cards use the existing supporting-template parsers."""
+    return 'supporting' if slot in SPAIN_UPLOAD_SLOTS else slot
+
+
 def upload_thumbnail(name,data,category='supporting'):
     """Bounded preview generated in memory; bank previews show only the final page."""
     validate_uploads({category:[(name,data)]})
+    if PurePath(name).suffix.lower() in TEXT_EXTENSIONS:
+        from document_ingestion import normalize_uploads
+        converted,_=normalize_uploads({category:[(name,data)]})
+        name,data=converted[category][0]
     if name.lower().endswith('.pdf'):
         with fitz.open(stream=data,filetype='pdf') as doc:
             index=len(doc)-1 if category=='bank_statement' else 0
@@ -46,8 +68,9 @@ def files_hash(files: dict, model: str, lang: str = "en") -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def validate_uploads(files: dict, max_files: int = 30, max_total_mb: int = 75) -> None:
-    if not files or any(category not in CATEGORIES for category in files):
+def validate_uploads(files: dict, max_files: int = 30, max_total_mb: int = 75, *, allowed_categories=None) -> None:
+    allowed=CATEGORIES if allowed_categories is None else allowed_categories
+    if not files or any(category not in allowed for category in files):
         raise ValueError("upload_invalid")
     entries = [entry for group in files.values() for entry in group]
     if len(entries) > max_files or sum(len(data) for _, data in entries) > max_total_mb * 1024**2:
@@ -63,11 +86,13 @@ def validate_uploads(files: dict, max_files: int = 30, max_total_mb: int = 75) -
                 with fitz.open(stream=data, filetype="pdf") as pdf:
                     if pdf.needs_pass or not 0 < pdf.page_count <= 150:
                         raise ValueError("upload_invalid")
-            elif extension in {".png", ".jpg", ".jpeg", ".webp"}:
+            elif extension in TEXT_EXTENSIONS:
+                native_text(name,data)
+            elif extension in {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}:
                 with Image.open(BytesIO(data)) as image:
                     if image.width * image.height > 25_000_000:
                         raise ValueError("upload_limit")
-                    formats = {".png": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG", ".webp": "WEBP"}
+                    formats = {".png": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG", ".webp": "WEBP",'.tif':'TIFF','.tiff':'TIFF'}
                     if image.format != formats[extension]:
                         raise ValueError("upload_invalid")
                     image.verify()

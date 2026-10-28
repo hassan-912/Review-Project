@@ -2,7 +2,7 @@ from datetime import date
 from unittest.mock import Mock
 from types import SimpleNamespace
 import pytest
-from extractor import VisaDocumentExtraction, HotelInfo, _is_passport_category, _build_extraction_prompt, call_gemini_with_fallback, AVAILABLE_MODELS
+from extractor import VisaDocumentExtraction, HotelInfo, _is_passport_category
 from validator import run_validation, Severity, _check_date_alignment, _check_identity_name_crosscheck, _check_passport_expiry, _check_missing_fields
 from scorer import calculate_score
 from business_checker import check_business_alignment
@@ -27,10 +27,11 @@ def test_missing_hotels_are_an_empty_list(value):
     assert VisaDocumentExtraction.model_validate({"hotel":value}).hotel==[]
 
 
-def test_internal_hotel_gap_is_detected(complete_extraction):
+def test_internal_hotel_gap_is_not_a_review_rule(complete_extraction):
     complete_extraction.hotel[1].check_in_date="2027-01-07"
     gaps=[i for i in run_validation(complete_extraction) if i.field_name=="hotel_coverage_gap"]
-    assert len(gaps)==1 and gaps[0].severity==Severity.HIGH
+    assert gaps==[]
+    assert not _check_date_alignment(complete_extraction)
 
 
 def test_overlapping_hotel_bookings_cover_trip(complete_extraction):
@@ -40,12 +41,18 @@ def test_overlapping_hotel_bookings_cover_trip(complete_extraction):
 
 def test_late_first_hotel_leaves_gap(complete_extraction):
     complete_extraction.hotel[0].check_in_date="2027-01-02"
-    assert any(i.field_name=="hotel_coverage_gap" for i in _check_date_alignment(complete_extraction))
+    issues=_check_date_alignment(complete_extraction)
+    checkin=[issue for issue in issues if issue.field_name=='check_in_date']
+    assert len(checkin)==1 and checkin[0].found_value=='2027-01-02' and checkin[0].expected_value=='2027-01-01'
+    assert not any(issue.field_name=='hotel_coverage_gap' for issue in issues)
 
 
 def test_short_last_hotel_leaves_gap(complete_extraction):
     complete_extraction.hotel[-1].check_out_date="2027-01-09"
-    assert any(i.field_name=="hotel_coverage_gap" for i in _check_date_alignment(complete_extraction))
+    issues=_check_date_alignment(complete_extraction)
+    checkout=[issue for issue in issues if issue.field_name=='check_out_date']
+    assert len(checkout)==1 and checkout[0].found_value=='2027-01-09' and checkout[0].expected_value=='2027-01-10'
+    assert not any(issue.field_name=='hotel_coverage_gap' for issue in issues)
 
 
 def test_each_hotel_guest_is_checked(complete_extraction):
@@ -59,9 +66,9 @@ def test_each_hotel_requires_dates(complete_extraction):
     assert any(i.field_name=="check_in_date" for i in _check_missing_fields(complete_extraction))
 
 
-def test_reversed_hotel_dates(complete_extraction):
+def test_per_stay_hotel_order_is_not_a_separate_review_rule(complete_extraction):
     complete_extraction.hotel[1].check_out_date="2027-01-04"
-    assert any(i.field_name=="hotel_date_order" for i in _check_date_alignment(complete_extraction))
+    assert not any(i.field_name=="hotel_date_order" for i in _check_date_alignment(complete_extraction))
 
 
 @pytest.mark.parametrize("returned",["2027-01-31","2027-03-31","2027-08-31","2027-11-30"])
@@ -113,45 +120,12 @@ def test_invalid_uploads_are_rejected(files):
     with pytest.raises(ValueError):validate_uploads(files)
 
 
-def test_prompt_preserves_deterministic_evidence_language():
-    prompt=_build_extraction_prompt(["passport"],"ar")
-    assert "Modern Standard Arabic" in prompt and "English so deterministic validation" in prompt
-    assert "untrusted evidence" in prompt and "EVERY accommodation" in prompt
 
 
-def test_model_priority_is_automatic_even_with_legacy_preference():
-    client=Mock(); client.models.generate_content.return_value.text='{}'
-    used=[]
-    call_gemini_with_fallback(client,[],model_id=AVAILABLE_MODELS[-1],model_callback=used.append)
-    assert client.models.generate_content.call_args.kwargs['model']==AVAILABLE_MODELS[0]
-    assert used==[AVAILABLE_MODELS[0]]
 
 
-def test_partial_parallel_upload_failure_deletes_successful_uploads(monkeypatch):
-    import extractor
-    client=Mock()
-    def upload(client,name,data,mime):
-        if name=='bad':raise RuntimeError('upload failed')
-        return SimpleNamespace(name='files/synthetic')
-    monkeypatch.setattr(extractor,'_upload_single_file',upload)
-    with pytest.raises(RuntimeError):
-        extractor._upload_files_parallel(client,[('good','image/png',b'x'),('bad','image/png',b'x')])
-    client.files.delete.assert_called_once_with(name='files/synthetic')
 
 
-def test_extraction_parse_failure_still_deletes_provider_files(monkeypatch):
-    import extractor
-    client=Mock();file=SimpleNamespace(name='files/synthetic')
-    monkeypatch.setattr(extractor.genai,'Client',Mock(return_value=client))
-    monkeypatch.setattr(extractor,'_classify_content',lambda files:([0],[('passport','application/pdf',b'xx')],['passport']))
-    monkeypatch.setattr(extractor,'_upload_files_parallel',lambda *a,**kw:[file])
-    monkeypatch.setattr(extractor,'_wait_for_files_active',lambda *a,**kw:[file])
-    monkeypatch.setattr(extractor,'_assemble_content_parts',lambda *a,**kw:[])
-    monkeypatch.setattr(extractor,'call_gemini_with_fallback',lambda *a,**kw:'invalid JSON')
-    with pytest.raises(ValueError):extractor.extract_documents('fake',{'passport':[('a.pdf',b'xx')]})
-    client.files.delete.assert_called_once_with(name='files/synthetic')
-    client.close.assert_called_once()
-    assert extractor.genai.Client.call_args.kwargs['http_options'].retry_options.attempts==1
 
 
 def test_pipeline_in_both_languages(monkeypatch,complete_extraction):
@@ -160,9 +134,9 @@ def test_pipeline_in_both_languages(monkeypatch,complete_extraction):
     monkeypatch.setattr(review_pipeline,'extract_documents',mocked)
     for lang in ('en','ar'):
         steps=[]
-        result=review_documents('fake',{'passport':[]},AVAILABLE_MODELS[0],lang,steps.append)
+        result=review_documents({'passport':[]},lang=lang,progress=steps.append)
         assert steps==[1,2,3,4,5] and result['score'].score==100
-        assert mocked.call_args.kwargs['lang']==lang
+        assert mocked.call_args.args[0]=={}
 
 
 @pytest.mark.parametrize('lang',['en','ar'])

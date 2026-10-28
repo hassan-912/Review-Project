@@ -42,6 +42,7 @@ class BookingStatus(BaseModel):
 
 def amount_in_quote(amount, quote):
     # Tolerate printed thousands/decimal separators, without accepting another amount.
+    quote=quote.translate(str.maketrans('٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹','01234567890123456789')).replace('٬',',').replace('٫','.').replace('،',',')
     candidates=re.findall(r'-?\d[\d ,.\u00a0]*\d|-?\d',quote)
     for candidate in candidates:
         raw=candidate.replace(' ','').replace('\u00a0','').rstrip('.,')
@@ -145,3 +146,34 @@ def assess_budget(data,daily_eur=75.0,rates=None):
                          'remaining_eur':round(value-known,2) if usable and value is not None else None})
     return {'days':days,'daily_eur':daily_eur,'allowance_eur':allowance,'known_budget_eur':known,
             'missing':sorted(set(missing)),'balances':balances,'costs':costs,'rate_date':rates.get('date')}
+
+
+def extract_booking_costs(data,uploaded):
+    """Accept one unambiguous, labelled total per reservation, with explicit currency."""
+    import pymupdf
+    from hr_extractor import normalize_money
+    label=r'(?:grand\s+total|total\s+(?:price|amount|fare|cost)|total|المبلغ\s+الإجمالي|السعر\s+الإجمالي|الإجمالي)'
+    currency=r'(EUR|EGP|USD|GBP|CHF|SEK|NOK|DKK|PLN|CZK|HUF|RON|€|جنيه\s+مصري)'
+    amount=r'([0-9٠-٩۰-۹][0-9٠-٩۰-۹.,،٬٫ ]*)'
+    pattern=re.compile(label+r'\s*[:=：-]?\s*(?:'+currency+r'\s*'+amount+r'|'+amount+r'\s*'+currency+r')',re.I)
+    existing={(c.category,c.source_file) for c in data.trip_costs}
+    for category in ('hotel','flight'):
+        for name,raw in uploaded.get(category,[]):
+            if (category,name) in existing or not name.lower().endswith('.pdf'):continue
+            try:
+                with pymupdf.open(stream=raw,filetype='pdf') as pdf:
+                    candidates=[]
+                    for number,page in enumerate(pdf,1):
+                        text=page.get_text(sort=True)
+                        for match in pattern.finditer(text):
+                            first_currency,first_amount,last_amount,last_currency=match.groups()
+                            value=normalize_money(first_amount or last_amount)
+                            unit=(first_currency or last_currency).upper()
+                            unit='EUR' if unit=='€' else 'EGP' if 'جنيه' in unit else unit
+                            if value is not None:candidates.append((float(value),unit,number,match.group()))
+                    if len({(v,c) for v,c,_,_ in candidates})!=1:continue
+                    value,unit,page,quote=candidates[0]
+                    # Payment is a separate explicit assertion, never inferred from a reservation.
+                    data.trip_costs.append(TripCost(category=category,source_file=name,page=page,
+                        amount=value,currency=unit,paid=False,quote=quote))
+            except Exception:continue

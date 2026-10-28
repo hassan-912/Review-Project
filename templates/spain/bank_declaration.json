@@ -1,0 +1,2669 @@
+{
+  "schema_version": 1,
+  "template_id": "spain.bank_declaration",
+  "country": "Spain",
+  "reference_filename": "Bank-Decleration.pdf",
+  "reference_sha256": "a219638c5f6e6ee2f3153dd65e85088748dc7d3c2ddc7c368d7be8d680f7fe5c",
+  "pages": 1,
+  "interactive_pdf_fields": 0,
+  "status": "blank_template_mapped_awaiting_filled_sample",
+  "coordinate_system": "PDF points, origin top-left; page is 1-based; normalized regions also included",
+  "labels_note": "Labels are normalized descriptions of the printed field or a component of a compound field; baseline_region_text preserves original wording.",
+  "limitations": [
+    "These are values in the inspected blank reference, not extracted completed answers.",
+    "Printed labels, declaration paragraphs and checkbox options are template text, never applicant values.",
+    "A null checkbox/selection means no marked answer was observed in the blank reference.",
+    "Shared answer regions require splitting after filled examples are inspected.",
+    "Scanned/handwritten/flattened variants need OCR or visual checks; signatures are presence checks only.",
+    "Never copy an answer from another document to fill a blank here."
+  ],
+  "fields": [
+    {
+      "key": "applicant.full_name",
+      "label": "NOMBRE DEL SOLICITANTE DE VISADO / NAME OF THE VISA APPLICANT",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        19,
+        202,
+        550,
+        253
+      ],
+      "value_type": "text",
+      "options": [],
+      "subject_role": "applicant",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.031911,
+        0.239962,
+        0.923749,
+        0.300546
+      ],
+      "baseline_region_text": "NOMBRE DEL SOLICITANTE DE VISADO /NAME OF THE VISA APPLICANT/ التأشيرة طالب اسم:\n\n______________________________________________________________________________________"
+    },
+    {
+      "key": "bank_holder.full_name",
+      "label": "NOMBRE Y APELLIDOS / NAME & SURNAME",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        19,
+        302,
+        550,
+        338
+      ],
+      "value_type": "text",
+      "options": [],
+      "subject_role": "bank_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.031911,
+        0.358755,
+        0.923749,
+        0.401521
+      ],
+      "baseline_region_text": "NOMBRE Y APELLIDOS /NAME & SURNAME/ اللقب و سماال:\n______________________________________________________________________________________"
+    },
+    {
+      "key": "bank_holder.passport_number",
+      "label": "PASAPORTE Nº / PASSPORT NUMBER",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        19,
+        338,
+        550,
+        366
+      ],
+      "value_type": "identifier",
+      "options": [],
+      "subject_role": "bank_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.031911,
+        0.401521,
+        0.923749,
+        0.434783
+      ],
+      "baseline_region_text": "PASAPORTE Nº /PASSPORT NUMBER: _________________________________________: رقم سفر جواز"
+    },
+    {
+      "key": "bank_holder.national_id_number",
+      "label": "DOC. IDENTIDAD Nº / ID NUMBER",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        19,
+        370,
+        550,
+        400
+      ],
+      "value_type": "identifier",
+      "options": [],
+      "subject_role": "bank_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.031911,
+        0.439534,
+        0.923749,
+        0.475172
+      ],
+      "baseline_region_text": "DOC. IDENTIDAD Nº /ID NUMBER:___________________________________________: رقم شخصية بطاقة"
+    },
+    {
+      "key": "declaration.place",
+      "label": "Fecha Y LUGAR / DATE Y PLACE",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        19,
+        533,
+        550,
+        557
+      ],
+      "value_type": "text",
+      "options": [],
+      "subject_role": "applicant",
+      "condition": null,
+      "value": "CAIRO",
+      "value_status": "preprinted",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.031911,
+        0.633167,
+        0.923749,
+        0.661677
+      ],
+      "baseline_region_text": "Fecha Y LUGAR/DATE Y PLACE: CAIRO, ___________________________________:القاهرة المكان، و لتاريخ ا"
+    },
+    {
+      "key": "declaration.date",
+      "label": "Fecha Y LUGAR / DATE Y PLACE",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        235,
+        533,
+        450,
+        557
+      ],
+      "value_type": "date",
+      "options": [],
+      "subject_role": "applicant",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.394693,
+        0.633167,
+        0.755794,
+        0.661677
+      ],
+      "baseline_region_text": "___________________________________"
+    },
+    {
+      "key": "declaration.bank_signature_present",
+      "label": "LA FIRMA BANCARIA / BANK SIGNATURE",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        19,
+        560,
+        550,
+        585
+      ],
+      "value_type": "signature_presence",
+      "options": [],
+      "subject_role": "bank_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.031911,
+        0.665241,
+        0.923749,
+        0.694939
+      ],
+      "baseline_region_text": "LA FIRMA BANCARIA/BANK SIGNATURE:_________________________________ _______:البنكي التوقيع"
+    }
+  ],
+  "baseline_pages": [
+    {
+      "page": 1,
+      "width": 595.4000244140625,
+      "height": 841.7999877929688,
+      "printed_text": " EMBAJADA DE ESPAÑA EN EGIPTO\n\n\nNOMBRE DEL SOLICITANTE DE VISADO /NAME OF THE VISA APPLICANT/ التأشيرة طالب اسم:\n\n______________________________________________________________________________________\n\n\n DOTOS DEL TITULAR DE LA CUENTA BANCARIA /DATA OF THE BANK HOLDER/ البنكي الحساب صاحب بيانات\n\nNOMBRE Y APELLIDOS /NAME & SURNAME/ اللقب و سماال:\n______________________________________________________________________________________\n\nPASAPORTE Nº /PASSPORT NUMBER: _________________________________________: رقم سفر جواز\n\nDOC. IDENTIDAD Nº /ID NUMBER:___________________________________________: رقم شخصية بطاقة\n\n\nAUTORIZO a la Embajada de España en Egipto a solicitar confirmación de la autenticidad de las cuentas\nbancarias aportadas con esta solicitud de visado a la entidad financiera\n\nI AUTHORIZE the Embassy of Spain in Egypt to request confirmation of the authenticity of the bank accounts\nprovided with this visa application to the financial entity\n\n             .المالية المؤسسة من التأشيرة طلب مع المقدمة البنكية الحسابات صحة من التحقق مصر في أسبانيا لسفارة أنا أصرح\n\n\nFecha Y LUGAR/DATE Y PLACE: CAIRO, ___________________________________:القاهرة المكان، و لتاريخ ا\n\nLA FIRMA BANCARIA/BANK SIGNATURE:_________________________________ _______:البنكي التوقيع\n\n\n**En el caso de una cuenta bancaria no personal, ha de presentar copia de la identificación/del pasaporte del\ntitular de la cuenta bancaria con la declaración.\n\n**In case of non-personal bank account, a copy of ID/Passport of the bank holder should be submitted with the\ndeclaration\n\n                    .االقرار مع البنكي الحساب لصاحب سفر جواز/ الشخصية البطاقة صورة ارفاق يجب شخصي، غير بنكي حساب تقديم حالة ي ف**",
+      "lines": [
+        {
+          "text": "EMBAJADA DE ESPAÑA EN EGIPTO",
+          "region_pdf_points": [
+            28.4,
+            153.265,
+            223.982,
+            166.22
+          ]
+        },
+        {
+          "text": ":اسم طالب التأشيرة",
+          "region_pdf_points": [
+            413.92,
+            202.57,
+            503.332,
+            220.41
+          ]
+        },
+        {
+          "text": "NOMBRE DEL SOLICITANTE  DE VISADO /NAME OF THE VISA APPLICANT/",
+          "region_pdf_points": [
+            19.8,
+            206.19,
+            414.188,
+            219.546
+          ]
+        },
+        {
+          "text": "______________________________________________________________________________________",
+          "region_pdf_points": [
+            19.6,
+            233.295,
+            548.838,
+            245.56
+          ]
+        },
+        {
+          "text": "بيانات",
+          "region_pdf_points": [
+            540.78,
+            271.095,
+            565.131,
+            283.36
+          ]
+        },
+        {
+          "text": "صاحب الحساب البنكيDOTOS DEL TITULAR DE LA CUENTA BANCARIA /DATA OF THE BANK HOLDER/",
+          "region_pdf_points": [
+            30.8,
+            271.095,
+            540.728,
+            283.36
+          ]
+        },
+        {
+          "text": ":اال",
+          "region_pdf_points": [
+            304.7,
+            302.21,
+            318.992,
+            317.82
+          ]
+        },
+        {
+          "text": "سم و اللقب",
+          "region_pdf_points": [
+            252.27,
+            302.21,
+            304.734,
+            317.82
+          ]
+        },
+        {
+          "text": "NOMBRE Y APELLIDOS /NAME & SURNAME/",
+          "region_pdf_points": [
+            19.8,
+            304.925,
+            252.328,
+            317.19
+          ]
+        },
+        {
+          "text": "______________________________________________________________________________________",
+          "region_pdf_points": [
+            19.6,
+            318.525,
+            548.838,
+            330.79
+          ]
+        },
+        {
+          "text": "PASAPORTE Nº /PASSPORT NUMBER: _________________________________________:جواز سفر رقم",
+          "region_pdf_points": [
+            19.6,
+            343.61,
+            546.838,
+            359.22
+          ]
+        },
+        {
+          "text": "DOC. IDENTIDAD Nº /ID NUMBER:___________________________________________:بطاقة شخصية رقم",
+          "region_pdf_points": [
+            19.6,
+            375.8,
+            548.472,
+            391.41
+          ]
+        },
+        {
+          "text": "AUTORIZO a la Embajada de España en Egipto a solicitar confirmación de la autenticidad de las cuentas",
+          "region_pdf_points": [
+            19.6,
+            417.345,
+            536.271,
+            429.61
+          ]
+        },
+        {
+          "text": "bancarias aportadas con esta solicitud de visado a la entidad financiera",
+          "region_pdf_points": [
+            19.6,
+            429.945,
+            373.778,
+            442.21
+          ]
+        },
+        {
+          "text": "I AUTHORIZE the Embassy of Spain in Egypt to request confirmation of the authenticity of the bank accounts",
+          "region_pdf_points": [
+            19.6,
+            455.145,
+            553.859,
+            467.388
+          ]
+        },
+        {
+          "text": "provided with this visa application to the financial entity",
+          "region_pdf_points": [
+            19.6,
+            467.745,
+            289.358,
+            479.988
+          ]
+        },
+        {
+          "text": "أصرح أنا لسفارة أسبانيا في مصر",
+          "region_pdf_points": [
+            422.73,
+            496.66,
+            576.128,
+            512.27
+          ]
+        },
+        {
+          "text": "التحقق من صحة الحسابات البنكية المقدمة مع طلب التأشيرة",
+          "region_pdf_points": [
+            157.05,
+            496.66,
+            422.596,
+            512.27
+          ]
+        },
+        {
+          "text": ".من المؤسسة المالية",
+          "region_pdf_points": [
+            61.025,
+            496.66,
+            156.819,
+            512.27
+          ]
+        },
+        {
+          "text": "Fecha Y LUGAR/DATE Y PLACE: CAIRO, ___________________________________",
+          "region_pdf_points": [
+            19.6,
+            539.06,
+            450.866,
+            552.44
+          ]
+        },
+        {
+          "text": "ا",
+          "region_pdf_points": [
+            544.38,
+            539.965,
+            549.838,
+            552.23
+          ]
+        },
+        {
+          "text": "لتاريخ و المكان، القاهرة:",
+          "region_pdf_points": [
+            450.75,
+            537.25,
+            544.313,
+            552.86
+          ]
+        },
+        {
+          "text": "LA FIRMA BANCARIA/BANK SIGNATURE:_________________________________",
+          "region_pdf_points": [
+            19.6,
+            566.775,
+            442.118,
+            579.04
+          ]
+        },
+        {
+          "text": "التوقيع البنكي:",
+          "region_pdf_points": [
+            484.75,
+            566.775,
+            540.438,
+            579.04
+          ]
+        },
+        {
+          "text": "_______",
+          "region_pdf_points": [
+            442.15,
+            566.775,
+            484.83,
+            579.04
+          ]
+        },
+        {
+          "text": "**En el caso de una cuenta bancaria no personal, ha de presentar copia de la identificación/del pasaporte del",
+          "region_pdf_points": [
+            19.6,
+            604.575,
+            554.814,
+            616.84
+          ]
+        },
+        {
+          "text": "titular de la cuenta bancaria con la declaración.",
+          "region_pdf_points": [
+            19.6,
+            617.195,
+            264.938,
+            629.46
+          ]
+        },
+        {
+          "text": "**In case of non-personal bank account, a copy of ID/Passport of the bank holder should be submitted with the",
+          "region_pdf_points": [
+            19.6,
+            642.395,
+            559.505,
+            654.638
+          ]
+        },
+        {
+          "text": "declaration",
+          "region_pdf_points": [
+            19.6,
+            654.995,
+            79.483,
+            667.238
+          ]
+        },
+        {
+          "text": "**ف",
+          "region_pdf_points": [
+            563.17,
+            680.29,
+            576.046,
+            693.67
+          ]
+        },
+        {
+          "text": "ي حالة تقديم حساب بنكي غير شخصي، يجب ارفاق صورة البطاقة الشخصية/جواز سفر لصاحب الحساب البنكي مع االقرار.",
+          "region_pdf_points": [
+            87.225,
+            680.29,
+            562.874,
+            693.67
+          ]
+        }
+      ],
+      "words": [
+        {
+          "text": "EMBAJADA",
+          "region_pdf_points": [
+            28.4,
+            153.265,
+            90.902,
+            165.53
+          ]
+        },
+        {
+          "text": "DE",
+          "region_pdf_points": [
+            93.564,
+            153.265,
+            108.887,
+            165.53
+          ]
+        },
+        {
+          "text": "ESPAÑA",
+          "region_pdf_points": [
+            111.945,
+            153.265,
+            158.057,
+            165.53
+          ]
+        },
+        {
+          "text": "EN",
+          "region_pdf_points": [
+            160.719,
+            153.265,
+            176.053,
+            165.53
+          ]
+        },
+        {
+          "text": "EGIPTO",
+          "region_pdf_points": [
+            179.1,
+            153.265,
+            221.021,
+            165.53
+          ]
+        },
+        {
+          "text": ":",
+          "region_pdf_points": [
+            499.44,
+            204.38,
+            503.332,
+            219.99
+          ]
+        },
+        {
+          "text": "اسم",
+          "region_pdf_points": [
+            484.446,
+            204.38,
+            499.566,
+            219.99
+          ]
+        },
+        {
+          "text": "طالب",
+          "region_pdf_points": [
+            456.278,
+            204.38,
+            480.624,
+            219.99
+          ]
+        },
+        {
+          "text": "التأشيرة",
+          "region_pdf_points": [
+            418.52,
+            204.38,
+            452.4,
+            219.99
+          ]
+        },
+        {
+          "text": "NOMBRE",
+          "region_pdf_points": [
+            23.2,
+            207.095,
+            71.49,
+            219.36
+          ]
+        },
+        {
+          "text": "DEL",
+          "region_pdf_points": [
+            74.625,
+            207.095,
+            96.119,
+            219.36
+          ]
+        },
+        {
+          "text": "SOLICITANTE",
+          "region_pdf_points": [
+            99.199,
+            207.095,
+            170.897,
+            219.36
+          ]
+        },
+        {
+          "text": "DE",
+          "region_pdf_points": [
+            177.05,
+            207.095,
+            192.373,
+            219.36
+          ]
+        },
+        {
+          "text": "VISADO",
+          "region_pdf_points": [
+            195.431,
+            207.095,
+            237.154,
+            219.36
+          ]
+        },
+        {
+          "text": "/NAME",
+          "region_pdf_points": [
+            240.27,
+            207.095,
+            275.17,
+            219.36
+          ]
+        },
+        {
+          "text": "OF",
+          "region_pdf_points": [
+            278.27,
+            207.095,
+            293.395,
+            219.338
+          ]
+        },
+        {
+          "text": "THE",
+          "region_pdf_points": [
+            296.464,
+            207.095,
+            318.574,
+            219.338
+          ]
+        },
+        {
+          "text": "VISA",
+          "region_pdf_points": [
+            321.632,
+            207.095,
+            346.569,
+            219.338
+          ]
+        },
+        {
+          "text": "APPLICANT/",
+          "region_pdf_points": [
+            349.627,
+            207.095,
+            414.188,
+            219.338
+          ]
+        },
+        {
+          "text": "______________________________________________________________________________________",
+          "region_pdf_points": [
+            19.6,
+            233.295,
+            545.816,
+            245.56
+          ]
+        },
+        {
+          "text": "بيانات",
+          "region_pdf_points": [
+            543.78,
+            271.095,
+            565.131,
+            283.36
+          ]
+        },
+        {
+          "text": "صاحب",
+          "region_pdf_points": [
+            516.693,
+            271.095,
+            540.728,
+            283.36
+          ]
+        },
+        {
+          "text": "الحساب",
+          "region_pdf_points": [
+            486.52,
+            271.095,
+            513.657,
+            283.36
+          ]
+        },
+        {
+          "text": "البنكي",
+          "region_pdf_points": [
+            462.155,
+            271.095,
+            483.484,
+            283.36
+          ]
+        },
+        {
+          "text": "DOTOS",
+          "region_pdf_points": [
+            30.8,
+            271.095,
+            70.103,
+            283.36
+          ]
+        },
+        {
+          "text": "DEL",
+          "region_pdf_points": [
+            73.161,
+            271.095,
+            95.073,
+            283.36
+          ]
+        },
+        {
+          "text": "TITULAR",
+          "region_pdf_points": [
+            98.025,
+            271.095,
+            144.731,
+            283.36
+          ]
+        },
+        {
+          "text": "DE",
+          "region_pdf_points": [
+            147.976,
+            271.095,
+            163.299,
+            283.36
+          ]
+        },
+        {
+          "text": "LA",
+          "region_pdf_points": [
+            166.357,
+            271.095,
+            181.284,
+            283.36
+          ]
+        },
+        {
+          "text": "CUENTA",
+          "region_pdf_points": [
+            183.946,
+            271.095,
+            230.245,
+            283.36
+          ]
+        },
+        {
+          "text": "BANCARIA",
+          "region_pdf_points": [
+            232.709,
+            271.095,
+            291.79,
+            283.36
+          ]
+        },
+        {
+          "text": "/DATA",
+          "region_pdf_points": [
+            294.452,
+            271.095,
+            328.387,
+            283.36
+          ]
+        },
+        {
+          "text": "OF",
+          "region_pdf_points": [
+            331.236,
+            271.095,
+            346.548,
+            283.36
+          ]
+        },
+        {
+          "text": "THE",
+          "region_pdf_points": [
+            349.419,
+            271.095,
+            371.727,
+            283.36
+          ]
+        },
+        {
+          "text": "BANK",
+          "region_pdf_points": [
+            374.785,
+            271.095,
+            406.102,
+            283.36
+          ]
+        },
+        {
+          "text": "HOLDER/",
+          "region_pdf_points": [
+            409.149,
+            271.095,
+            459.408,
+            283.36
+          ]
+        },
+        {
+          "text": ":",
+          "region_pdf_points": [
+            315.1,
+            302.21,
+            318.992,
+            317.82
+          ]
+        },
+        {
+          "text": "اال",
+          "region_pdf_points": [
+            304.7,
+            302.21,
+            315.198,
+            317.82
+          ]
+        },
+        {
+          "text": "سم",
+          "region_pdf_points": [
+            292.5,
+            302.21,
+            304.734,
+            317.82
+          ]
+        },
+        {
+          "text": "و",
+          "region_pdf_points": [
+            282.422,
+            302.21,
+            288.47,
+            317.82
+          ]
+        },
+        {
+          "text": "اللقب",
+          "region_pdf_points": [
+            256.27,
+            302.21,
+            278.544,
+            317.82
+          ]
+        },
+        {
+          "text": "NOMBRE",
+          "region_pdf_points": [
+            19.8,
+            304.925,
+            68.09,
+            317.19
+          ]
+        },
+        {
+          "text": "Y",
+          "region_pdf_points": [
+            71.335,
+            304.925,
+            78.672,
+            317.19
+          ]
+        },
+        {
+          "text": "APELLIDOS",
+          "region_pdf_points": [
+            81.334,
+            304.925,
+            142.813,
+            317.19
+          ]
+        },
+        {
+          "text": "/NAME",
+          "region_pdf_points": [
+            146.05,
+            304.925,
+            180.763,
+            317.19
+          ]
+        },
+        {
+          "text": "&",
+          "region_pdf_points": [
+            183.821,
+            304.925,
+            191.158,
+            317.168
+          ]
+        },
+        {
+          "text": "SURNAME/",
+          "region_pdf_points": [
+            194.216,
+            304.925,
+            252.328,
+            317.168
+          ]
+        },
+        {
+          "text": "______________________________________________________________________________________",
+          "region_pdf_points": [
+            19.6,
+            318.525,
+            545.823,
+            330.79
+          ]
+        },
+        {
+          "text": "PASAPORTE",
+          "region_pdf_points": [
+            19.6,
+            346.325,
+            86.887,
+            358.59
+          ]
+        },
+        {
+          "text": "Nº",
+          "region_pdf_points": [
+            89.945,
+            346.325,
+            101.946,
+            358.59
+          ]
+        },
+        {
+          "text": "/PASSPORT",
+          "region_pdf_points": [
+            104.927,
+            346.325,
+            167.904,
+            358.59
+          ]
+        },
+        {
+          "text": "NUMBER:",
+          "region_pdf_points": [
+            170.973,
+            346.325,
+            221.938,
+            358.568
+          ]
+        },
+        {
+          "text": "_________________________________________:",
+          "region_pdf_points": [
+            224.67,
+            343.61,
+            479.442,
+            359.22
+          ]
+        },
+        {
+          "text": "جواز",
+          "region_pdf_points": [
+            520.49,
+            343.61,
+            543.702,
+            359.22
+          ]
+        },
+        {
+          "text": "سفر",
+          "region_pdf_points": [
+            498.706,
+            343.61,
+            516.724,
+            359.22
+          ]
+        },
+        {
+          "text": "رقم",
+          "region_pdf_points": [
+            479.54,
+            343.61,
+            494.954,
+            359.22
+          ]
+        },
+        {
+          "text": "DOC.",
+          "region_pdf_points": [
+            19.6,
+            378.515,
+            47.221,
+            390.78
+          ]
+        },
+        {
+          "text": "IDENTIDAD",
+          "region_pdf_points": [
+            50.169,
+            378.515,
+            109.459,
+            390.78
+          ]
+        },
+        {
+          "text": "Nº",
+          "region_pdf_points": [
+            112.506,
+            378.515,
+            124.507,
+            390.78
+          ]
+        },
+        {
+          "text": "/ID",
+          "region_pdf_points": [
+            127.488,
+            378.515,
+            141.595,
+            390.78
+          ]
+        },
+        {
+          "text": "NUMBER:___________________________________________:",
+          "region_pdf_points": [
+            144.642,
+            375.8,
+            462.442,
+            391.41
+          ]
+        },
+        {
+          "text": "بطاقة",
+          "region_pdf_points": [
+            520.696,
+            375.8,
+            544.468,
+            391.41
+          ]
+        },
+        {
+          "text": "شخصية",
+          "region_pdf_points": [
+            481.706,
+            375.8,
+            516.958,
+            391.41
+          ]
+        },
+        {
+          "text": "رقم",
+          "region_pdf_points": [
+            462.54,
+            375.8,
+            477.954,
+            391.41
+          ]
+        },
+        {
+          "text": "AUTORIZO",
+          "region_pdf_points": [
+            19.6,
+            417.345,
+            76.503,
+            429.61
+          ]
+        },
+        {
+          "text": "a",
+          "region_pdf_points": [
+            79.539,
+            417.345,
+            85.655,
+            429.61
+          ]
+        },
+        {
+          "text": "la",
+          "region_pdf_points": [
+            88.735,
+            417.345,
+            97.051,
+            429.61
+          ]
+        },
+        {
+          "text": "Embajada",
+          "region_pdf_points": [
+            100.131,
+            417.345,
+            149.785,
+            429.61
+          ]
+        },
+        {
+          "text": "de",
+          "region_pdf_points": [
+            152.865,
+            417.345,
+            165.174,
+            429.61
+          ]
+        },
+        {
+          "text": "España",
+          "region_pdf_points": [
+            168.056,
+            417.345,
+            205.335,
+            429.61
+          ]
+        },
+        {
+          "text": "en",
+          "region_pdf_points": [
+            208.415,
+            417.345,
+            220.724,
+            429.61
+          ]
+        },
+        {
+          "text": "Egipto",
+          "region_pdf_points": [
+            223.606,
+            417.345,
+            254.703,
+            429.61
+          ]
+        },
+        {
+          "text": "a",
+          "region_pdf_points": [
+            258.07,
+            417.345,
+            264.186,
+            429.61
+          ]
+        },
+        {
+          "text": "solicitar",
+          "region_pdf_points": [
+            267.266,
+            417.345,
+            304.49,
+            429.61
+          ]
+        },
+        {
+          "text": "confirmación",
+          "region_pdf_points": [
+            307.427,
+            417.345,
+            369.885,
+            429.61
+          ]
+        },
+        {
+          "text": "de",
+          "region_pdf_points": [
+            372.965,
+            417.345,
+            385.274,
+            429.61
+          ]
+        },
+        {
+          "text": "la",
+          "region_pdf_points": [
+            388.354,
+            417.345,
+            396.67,
+            429.61
+          ]
+        },
+        {
+          "text": "autenticidad",
+          "region_pdf_points": [
+            399.75,
+            417.345,
+            459.007,
+            429.61
+          ]
+        },
+        {
+          "text": "de",
+          "region_pdf_points": [
+            462.087,
+            417.345,
+            474.396,
+            429.61
+          ]
+        },
+        {
+          "text": "las",
+          "region_pdf_points": [
+            477.476,
+            417.345,
+            491.369,
+            429.61
+          ]
+        },
+        {
+          "text": "cuentas",
+          "region_pdf_points": [
+            494.46,
+            417.345,
+            533.125,
+            429.61
+          ]
+        },
+        {
+          "text": "bancarias",
+          "region_pdf_points": [
+            19.6,
+            429.945,
+            67.252,
+            442.21
+          ]
+        },
+        {
+          "text": "aportadas",
+          "region_pdf_points": [
+            70.343,
+            429.945,
+            119.205,
+            442.21
+          ]
+        },
+        {
+          "text": "con",
+          "region_pdf_points": [
+            122.296,
+            429.945,
+            139.995,
+            442.21
+          ]
+        },
+        {
+          "text": "esta",
+          "region_pdf_points": [
+            143.25,
+            429.945,
+            164.15,
+            442.21
+          ]
+        },
+        {
+          "text": "solicitud",
+          "region_pdf_points": [
+            167.032,
+            429.945,
+            206.511,
+            442.21
+          ]
+        },
+        {
+          "text": "de",
+          "region_pdf_points": [
+            209.591,
+            429.945,
+            221.9,
+            442.21
+          ]
+        },
+        {
+          "text": "visado",
+          "region_pdf_points": [
+            224.98,
+            429.945,
+            256.858,
+            442.21
+          ]
+        },
+        {
+          "text": "a",
+          "region_pdf_points": [
+            259.938,
+            429.945,
+            266.054,
+            442.21
+          ]
+        },
+        {
+          "text": "la",
+          "region_pdf_points": [
+            269.134,
+            429.945,
+            277.45,
+            442.21
+          ]
+        },
+        {
+          "text": "entidad",
+          "region_pdf_points": [
+            280.53,
+            429.945,
+            316.621,
+            442.21
+          ]
+        },
+        {
+          "text": "financiera",
+          "region_pdf_points": [
+            319.701,
+            429.945,
+            367.364,
+            442.21
+          ]
+        },
+        {
+          "text": "I",
+          "region_pdf_points": [
+            19.6,
+            455.145,
+            22.658,
+            467.388
+          ]
+        },
+        {
+          "text": "AUTHORIZE",
+          "region_pdf_points": [
+            25.606,
+            455.145,
+            89.274,
+            467.388
+          ]
+        },
+        {
+          "text": "the",
+          "region_pdf_points": [
+            92.332,
+            455.145,
+            107.644,
+            467.388
+          ]
+        },
+        {
+          "text": "Embassy",
+          "region_pdf_points": [
+            110.724,
+            455.145,
+            155.989,
+            467.388
+          ]
+        },
+        {
+          "text": "of",
+          "region_pdf_points": [
+            158.882,
+            455.145,
+            168.133,
+            467.388
+          ]
+        },
+        {
+          "text": "Spain",
+          "region_pdf_points": [
+            171.081,
+            455.145,
+            199.175,
+            467.388
+          ]
+        },
+        {
+          "text": "in",
+          "region_pdf_points": [
+            202.255,
+            455.145,
+            210.571,
+            467.388
+          ]
+        },
+        {
+          "text": "Egypt",
+          "region_pdf_points": [
+            213.651,
+            455.145,
+            242.273,
+            467.388
+          ]
+        },
+        {
+          "text": "to",
+          "region_pdf_points": [
+            245.221,
+            455.145,
+            254.34,
+            467.388
+          ]
+        },
+        {
+          "text": "request",
+          "region_pdf_points": [
+            257.42,
+            455.145,
+            294.237,
+            467.388
+          ]
+        },
+        {
+          "text": "confirmation",
+          "region_pdf_points": [
+            297.185,
+            455.145,
+            356.871,
+            467.388
+          ]
+        },
+        {
+          "text": "of",
+          "region_pdf_points": [
+            359.951,
+            455.145,
+            369.202,
+            467.388
+          ]
+        },
+        {
+          "text": "the",
+          "region_pdf_points": [
+            372.15,
+            455.145,
+            387.462,
+            467.388
+          ]
+        },
+        {
+          "text": "authenticity",
+          "region_pdf_points": [
+            390.542,
+            455.145,
+            445.993,
+            467.388
+          ]
+        },
+        {
+          "text": "of",
+          "region_pdf_points": [
+            449.084,
+            455.145,
+            458.335,
+            467.388
+          ]
+        },
+        {
+          "text": "the",
+          "region_pdf_points": [
+            461.283,
+            455.145,
+            476.595,
+            467.388
+          ]
+        },
+        {
+          "text": "bank",
+          "region_pdf_points": [
+            479.675,
+            455.145,
+            503.556,
+            467.388
+          ]
+        },
+        {
+          "text": "accounts",
+          "region_pdf_points": [
+            506.647,
+            455.145,
+            550.713,
+            467.388
+          ]
+        },
+        {
+          "text": "provided",
+          "region_pdf_points": [
+            19.6,
+            467.745,
+            61.873,
+            479.988
+          ]
+        },
+        {
+          "text": "with",
+          "region_pdf_points": [
+            64.953,
+            467.745,
+            84.144,
+            479.988
+          ]
+        },
+        {
+          "text": "this",
+          "region_pdf_points": [
+            87.411,
+            467.745,
+            104.307,
+            479.988
+          ]
+        },
+        {
+          "text": "visa",
+          "region_pdf_points": [
+            107.398,
+            467.745,
+            127.088,
+            479.988
+          ]
+        },
+        {
+          "text": "application",
+          "region_pdf_points": [
+            130.168,
+            467.745,
+            182.638,
+            479.988
+          ]
+        },
+        {
+          "text": "to",
+          "region_pdf_points": [
+            185.718,
+            467.745,
+            194.837,
+            479.988
+          ]
+        },
+        {
+          "text": "the",
+          "region_pdf_points": [
+            197.917,
+            467.745,
+            213.229,
+            479.988
+          ]
+        },
+        {
+          "text": "financial",
+          "region_pdf_points": [
+            216.309,
+            467.745,
+            256.701,
+            479.988
+          ]
+        },
+        {
+          "text": "entity",
+          "region_pdf_points": [
+            259.66,
+            467.745,
+            285.95,
+            479.988
+          ]
+        },
+        {
+          "text": "أصرح",
+          "region_pdf_points": [
+            546.644,
+            496.66,
+            576.128,
+            512.27
+          ]
+        },
+        {
+          "text": "أنا",
+          "region_pdf_points": [
+            533.26,
+            496.66,
+            542.962,
+            512.27
+          ]
+        },
+        {
+          "text": "لسفارة",
+          "region_pdf_points": [
+            501.48,
+            496.66,
+            529.41,
+            512.27
+          ]
+        },
+        {
+          "text": "أسبانيا",
+          "region_pdf_points": [
+            470.498,
+            496.66,
+            497.616,
+            512.27
+          ]
+        },
+        {
+          "text": "في",
+          "region_pdf_points": [
+            454.692,
+            496.66,
+            466.676,
+            512.27
+          ]
+        },
+        {
+          "text": "مصر",
+          "region_pdf_points": [
+            426.524,
+            496.66,
+            450.828,
+            512.27
+          ]
+        },
+        {
+          "text": "التحقق",
+          "region_pdf_points": [
+            394.316,
+            496.66,
+            422.596,
+            512.27
+          ]
+        },
+        {
+          "text": "من",
+          "region_pdf_points": [
+            377.53,
+            496.66,
+            390.41,
+            512.27
+          ]
+        },
+        {
+          "text": "صحة",
+          "region_pdf_points": [
+            348.842,
+            496.66,
+            373.3,
+            512.27
+          ]
+        },
+        {
+          "text": "الحسابات",
+          "region_pdf_points": [
+            304.448,
+            496.66,
+            344.95,
+            512.27
+          ]
+        },
+        {
+          "text": "البنكية",
+          "region_pdf_points": [
+            273.886,
+            496.66,
+            300.57,
+            512.27
+          ]
+        },
+        {
+          "text": "المقدمة",
+          "region_pdf_points": [
+            239.544,
+            496.66,
+            269.994,
+            512.27
+          ]
+        },
+        {
+          "text": "مع",
+          "region_pdf_points": [
+            223.78,
+            496.66,
+            235.68,
+            512.27
+          ]
+        },
+        {
+          "text": "طلب",
+          "region_pdf_points": [
+            199.0,
+            496.66,
+            219.944,
+            512.27
+          ]
+        },
+        {
+          "text": "التأشيرة",
+          "region_pdf_points": [
+            160.85,
+            496.66,
+            195.108,
+            512.27
+          ]
+        },
+        {
+          "text": ".",
+          "region_pdf_points": [
+            69.025,
+            496.66,
+            72.917,
+            512.27
+          ]
+        },
+        {
+          "text": "من",
+          "region_pdf_points": [
+            143.939,
+            496.66,
+            156.819,
+            512.27
+          ]
+        },
+        {
+          "text": "المؤسسة",
+          "region_pdf_points": [
+            102.779,
+            496.66,
+            140.243,
+            512.27
+          ]
+        },
+        {
+          "text": "المالية",
+          "region_pdf_points": [
+            72.819,
+            496.66,
+            98.887,
+            512.27
+          ]
+        },
+        {
+          "text": "Fecha",
+          "region_pdf_points": [
+            19.6,
+            539.965,
+            51.478,
+            552.23
+          ]
+        },
+        {
+          "text": "Y",
+          "region_pdf_points": [
+            54.625,
+            539.965,
+            61.962,
+            552.23
+          ]
+        },
+        {
+          "text": "LUGAR/DATE",
+          "region_pdf_points": [
+            64.825,
+            539.965,
+            136.926,
+            552.23
+          ]
+        },
+        {
+          "text": "Y",
+          "region_pdf_points": [
+            140.05,
+            539.965,
+            147.387,
+            552.23
+          ]
+        },
+        {
+          "text": "PLACE:",
+          "region_pdf_points": [
+            150.45,
+            539.06,
+            191.846,
+            552.44
+          ]
+        },
+        {
+          "text": "CAIRO,",
+          "region_pdf_points": [
+            195.05,
+            539.965,
+            233.473,
+            552.23
+          ]
+        },
+        {
+          "text": "___________________________________",
+          "region_pdf_points": [
+            236.47,
+            539.965,
+            450.866,
+            552.23
+          ]
+        },
+        {
+          "text": "ا",
+          "region_pdf_points": [
+            544.38,
+            539.965,
+            546.767,
+            552.23
+          ]
+        },
+        {
+          "text": "لتاريخ",
+          "region_pdf_points": [
+            522.17,
+            539.965,
+            544.313,
+            552.23
+          ]
+        },
+        {
+          "text": "و",
+          "region_pdf_points": [
+            514.107,
+            539.965,
+            519.068,
+            552.23
+          ]
+        },
+        {
+          "text": "المكان،",
+          "region_pdf_points": [
+            485.35,
+            539.965,
+            511.071,
+            552.23
+          ]
+        },
+        {
+          "text": "القاهرة",
+          "region_pdf_points": [
+            454.55,
+            539.06,
+            481.55,
+            552.44
+          ]
+        },
+        {
+          "text": ":",
+          "region_pdf_points": [
+            450.75,
+            539.06,
+            454.746,
+            552.44
+          ]
+        },
+        {
+          "text": "LA",
+          "region_pdf_points": [
+            19.6,
+            566.775,
+            34.527,
+            579.04
+          ]
+        },
+        {
+          "text": "FIRMA",
+          "region_pdf_points": [
+            37.2,
+            566.775,
+            72.35,
+            579.04
+          ]
+        },
+        {
+          "text": "BANCARIA/BANK",
+          "region_pdf_points": [
+            75.012,
+            566.775,
+            168.55,
+            579.04
+          ]
+        },
+        {
+          "text": "SIGNATURE:_________________________________",
+          "region_pdf_points": [
+            171.597,
+            566.775,
+            442.118,
+            579.04
+          ]
+        },
+        {
+          "text": "التوقيع",
+          "region_pdf_points": [
+            512.75,
+            566.775,
+            537.302,
+            579.04
+          ]
+        },
+        {
+          "text": "البنكي",
+          "region_pdf_points": [
+            488.35,
+            566.775,
+            509.679,
+            579.04
+          ]
+        },
+        {
+          "text": ":",
+          "region_pdf_points": [
+            484.75,
+            566.775,
+            488.413,
+            579.04
+          ]
+        },
+        {
+          "text": "_______",
+          "region_pdf_points": [
+            442.15,
+            566.775,
+            484.83,
+            579.04
+          ]
+        },
+        {
+          "text": "**En",
+          "region_pdf_points": [
+            19.6,
+            604.575,
+            41.508,
+            616.84
+          ]
+        },
+        {
+          "text": "el",
+          "region_pdf_points": [
+            44.588,
+            604.575,
+            53.223,
+            616.84
+          ]
+        },
+        {
+          "text": "caso",
+          "region_pdf_points": [
+            55.984,
+            604.575,
+            79.469,
+            616.84
+          ]
+        },
+        {
+          "text": "de",
+          "region_pdf_points": [
+            82.549,
+            604.575,
+            94.858,
+            616.84
+          ]
+        },
+        {
+          "text": "una",
+          "region_pdf_points": [
+            97.938,
+            604.575,
+            116.242,
+            616.84
+          ]
+        },
+        {
+          "text": "cuenta",
+          "region_pdf_points": [
+            119.322,
+            604.575,
+            152.421,
+            616.84
+          ]
+        },
+        {
+          "text": "bancaria",
+          "region_pdf_points": [
+            155.303,
+            604.575,
+            197.378,
+            616.84
+          ]
+        },
+        {
+          "text": "no",
+          "region_pdf_points": [
+            200.458,
+            604.575,
+            212.767,
+            616.84
+          ]
+        },
+        {
+          "text": "personal,",
+          "region_pdf_points": [
+            215.847,
+            604.575,
+            260.859,
+            616.84
+          ]
+        },
+        {
+          "text": "ha",
+          "region_pdf_points": [
+            264.08,
+            604.575,
+            276.389,
+            616.84
+          ]
+        },
+        {
+          "text": "de",
+          "region_pdf_points": [
+            279.469,
+            604.575,
+            291.778,
+            616.84
+          ]
+        },
+        {
+          "text": "presentar",
+          "region_pdf_points": [
+            294.9,
+            604.575,
+            341.529,
+            616.84
+          ]
+        },
+        {
+          "text": "copia",
+          "region_pdf_points": [
+            344.5,
+            604.575,
+            370.592,
+            616.84
+          ]
+        },
+        {
+          "text": "de",
+          "region_pdf_points": [
+            373.672,
+            604.575,
+            385.981,
+            616.84
+          ]
+        },
+        {
+          "text": "la",
+          "region_pdf_points": [
+            389.13,
+            604.575,
+            397.446,
+            616.84
+          ]
+        },
+        {
+          "text": "identificación/del",
+          "region_pdf_points": [
+            400.713,
+            604.575,
+            482.178,
+            616.84
+          ]
+        },
+        {
+          "text": "pasaporte",
+          "region_pdf_points": [
+            484.95,
+            604.575,
+            534.021,
+            616.84
+          ]
+        },
+        {
+          "text": "del",
+          "region_pdf_points": [
+            537.17,
+            604.575,
+            551.998,
+            616.84
+          ]
+        },
+        {
+          "text": "titular",
+          "region_pdf_points": [
+            19.6,
+            617.195,
+            46.44,
+            629.46
+          ]
+        },
+        {
+          "text": "de",
+          "region_pdf_points": [
+            49.377,
+            617.195,
+            61.686,
+            629.46
+          ]
+        },
+        {
+          "text": "la",
+          "region_pdf_points": [
+            64.766,
+            617.195,
+            73.082,
+            629.46
+          ]
+        },
+        {
+          "text": "cuenta",
+          "region_pdf_points": [
+            76.162,
+            617.195,
+            109.448,
+            629.46
+          ]
+        },
+        {
+          "text": "bancaria",
+          "region_pdf_points": [
+            112.62,
+            617.195,
+            154.695,
+            629.46
+          ]
+        },
+        {
+          "text": "con",
+          "region_pdf_points": [
+            157.85,
+            617.195,
+            175.747,
+            629.46
+          ]
+        },
+        {
+          "text": "la",
+          "region_pdf_points": [
+            178.827,
+            617.195,
+            187.143,
+            629.46
+          ]
+        },
+        {
+          "text": "declaración.",
+          "region_pdf_points": [
+            190.223,
+            617.195,
+            249.728,
+            629.46
+          ]
+        },
+        {
+          "text": "**In",
+          "region_pdf_points": [
+            19.6,
+            642.395,
+            37.119,
+            654.638
+          ]
+        },
+        {
+          "text": "case",
+          "region_pdf_points": [
+            40.199,
+            642.395,
+            63.684,
+            654.638
+          ]
+        },
+        {
+          "text": "of",
+          "region_pdf_points": [
+            66.764,
+            642.395,
+            76.015,
+            654.638
+          ]
+        },
+        {
+          "text": "non-personal",
+          "region_pdf_points": [
+            78.963,
+            642.395,
+            143.227,
+            654.638
+          ]
+        },
+        {
+          "text": "bank",
+          "region_pdf_points": [
+            146.186,
+            642.395,
+            170.067,
+            654.638
+          ]
+        },
+        {
+          "text": "account,",
+          "region_pdf_points": [
+            173.158,
+            642.395,
+            214.782,
+            654.638
+          ]
+        },
+        {
+          "text": "a",
+          "region_pdf_points": [
+            217.88,
+            642.395,
+            223.996,
+            654.638
+          ]
+        },
+        {
+          "text": "copy",
+          "region_pdf_points": [
+            226.878,
+            642.395,
+            250.154,
+            654.638
+          ]
+        },
+        {
+          "text": "of",
+          "region_pdf_points": [
+            253.245,
+            642.395,
+            262.496,
+            654.638
+          ]
+        },
+        {
+          "text": "ID/Passport",
+          "region_pdf_points": [
+            265.48,
+            642.395,
+            323.098,
+            654.638
+          ]
+        },
+        {
+          "text": "of",
+          "region_pdf_points": [
+            326.1,
+            642.395,
+            335.351,
+            654.638
+          ]
+        },
+        {
+          "text": "the",
+          "region_pdf_points": [
+            338.299,
+            642.395,
+            353.611,
+            654.638
+          ]
+        },
+        {
+          "text": "bank",
+          "region_pdf_points": [
+            356.691,
+            642.395,
+            380.572,
+            654.638
+          ]
+        },
+        {
+          "text": "holder",
+          "region_pdf_points": [
+            383.73,
+            642.395,
+            414.365,
+            654.638
+          ]
+        },
+        {
+          "text": "should",
+          "region_pdf_points": [
+            417.33,
+            642.395,
+            449.824,
+            654.638
+          ]
+        },
+        {
+          "text": "be",
+          "region_pdf_points": [
+            452.706,
+            642.395,
+            465.015,
+            654.638
+          ]
+        },
+        {
+          "text": "submitted",
+          "region_pdf_points": [
+            468.095,
+            642.395,
+            515.593,
+            654.638
+          ]
+        },
+        {
+          "text": "with",
+          "region_pdf_points": [
+            518.673,
+            642.395,
+            537.978,
+            654.638
+          ]
+        },
+        {
+          "text": "the",
+          "region_pdf_points": [
+            541.058,
+            642.395,
+            556.37,
+            654.638
+          ]
+        },
+        {
+          "text": "declaration",
+          "region_pdf_points": [
+            19.6,
+            654.995,
+            73.269,
+            667.238
+          ]
+        },
+        {
+          "text": "**",
+          "region_pdf_points": [
+            566.77,
+            680.29,
+            576.046,
+            693.67
+          ]
+        },
+        {
+          "text": "ف",
+          "region_pdf_points": [
+            563.17,
+            680.29,
+            566.83,
+            693.67
+          ]
+        },
+        {
+          "text": "ي",
+          "region_pdf_points": [
+            555.95,
+            680.29,
+            562.874,
+            693.67
+          ]
+        },
+        {
+          "text": "حالة",
+          "region_pdf_points": [
+            535.766,
+            680.29,
+            552.638,
+            693.67
+          ]
+        },
+        {
+          "text": "تقديم",
+          "region_pdf_points": [
+            513.59,
+            680.29,
+            532.43,
+            693.67
+          ]
+        },
+        {
+          "text": "حساب",
+          "region_pdf_points": [
+            486.014,
+            680.29,
+            510.278,
+            693.67
+          ]
+        },
+        {
+          "text": "بنكي",
+          "region_pdf_points": [
+            464.846,
+            680.29,
+            482.678,
+            693.67
+          ]
+        },
+        {
+          "text": "غير",
+          "region_pdf_points": [
+            446.666,
+            680.29,
+            461.558,
+            693.67
+          ]
+        },
+        {
+          "text": "شخصي،",
+          "region_pdf_points": [
+            409.694,
+            680.29,
+            443.186,
+            693.67
+          ]
+        },
+        {
+          "text": "يجب",
+          "region_pdf_points": [
+            389.102,
+            680.29,
+            406.358,
+            693.67
+          ]
+        },
+        {
+          "text": "ارفاق",
+          "region_pdf_points": [
+            364.13,
+            680.29,
+            385.718,
+            693.67
+          ]
+        },
+        {
+          "text": "صورة",
+          "region_pdf_points": [
+            336.7,
+            680.29,
+            360.748,
+            693.67
+          ]
+        },
+        {
+          "text": "البطاقة",
+          "region_pdf_points": [
+            306.893,
+            680.29,
+            333.113,
+            693.67
+          ]
+        },
+        {
+          "text": "الشخصية",
+          "region_pdf_points": [
+            267.113,
+            680.29,
+            303.521,
+            693.67
+          ]
+        },
+        {
+          "text": "/",
+          "region_pdf_points": [
+            263.729,
+            680.29,
+            267.065,
+            693.67
+          ]
+        },
+        {
+          "text": "جواز",
+          "region_pdf_points": [
+            244.325,
+            680.29,
+            263.813,
+            693.67
+          ]
+        },
+        {
+          "text": "سفر",
+          "region_pdf_points": [
+            224.549,
+            680.29,
+            240.845,
+            693.67
+          ]
+        },
+        {
+          "text": "لصاحب",
+          "region_pdf_points": [
+            192.353,
+            680.29,
+            221.165,
+            693.67
+          ]
+        },
+        {
+          "text": "الحساب",
+          "region_pdf_points": [
+            159.377,
+            680.29,
+            188.981,
+            693.67
+          ]
+        },
+        {
+          "text": "البنكي",
+          "region_pdf_points": [
+            132.809,
+            680.29,
+            156.005,
+            693.67
+          ]
+        },
+        {
+          "text": "مع",
+          "region_pdf_points": [
+            118.793,
+            680.29,
+            129.401,
+            693.67
+          ]
+        },
+        {
+          "text": "االقرار",
+          "region_pdf_points": [
+            90.425,
+            680.29,
+            115.457,
+            693.67
+          ]
+        },
+        {
+          "text": ".",
+          "region_pdf_points": [
+            87.225,
+            680.29,
+            90.561,
+            693.67
+          ]
+        }
+      ],
+      "checkboxes": [],
+      "images": [
+        {
+          "region_pdf_points": [
+            28.4,
+            70.8,
+            303.6,
+            126.6
+          ],
+          "digest": "9391aceff703207be9aa2a87226b44a3"
+        }
+      ],
+      "drawings": [
+        {
+          "region_pdf_points": [
+            13.8,
+            177.85,
+            14.2,
+            178.45
+          ],
+          "signature": "d8507eb9ba2fdb61dbd047d9c3db87d593ffc4d61930bc15d73b671229f7b86f"
+        },
+        {
+          "region_pdf_points": [
+            13.8,
+            177.85,
+            14.2,
+            178.25
+          ],
+          "signature": "2e4fbcc9e4120f04d6e2b797f9a54a7f84fcc0ede07452911e9e9b5831b83605"
+        },
+        {
+          "region_pdf_points": [
+            14.2,
+            177.85,
+            581.17,
+            178.25
+          ],
+          "signature": "7a1c9ea2f4152a0cab7363c0618aab1600494facf1adeb6c8469d01c6d4e2555"
+        },
+        {
+          "region_pdf_points": [
+            581.17,
+            177.85,
+            581.57,
+            178.45
+          ],
+          "signature": "e6f7b291bdc0621f99349b52073b5833eedcc580f6f9d5542ab39612a042a568"
+        },
+        {
+          "region_pdf_points": [
+            581.17,
+            177.85,
+            581.57,
+            178.25
+          ],
+          "signature": "821e9187aa182375b981d45abc877cd6e3058d3e38c94a6f377813939e8c4e95"
+        },
+        {
+          "region_pdf_points": [
+            13.8,
+            178.455,
+            14.2,
+            751.175
+          ],
+          "signature": "95ea5cf1ab536103729c651fb72d12c43ba6630512e08337ff67762681e98e06"
+        },
+        {
+          "region_pdf_points": [
+            13.8,
+            751.175,
+            14.2,
+            751.575
+          ],
+          "signature": "1d654fa9bace1d9b849c068295e7fd12fa072c6a685cd430135042806a37ad46"
+        },
+        {
+          "region_pdf_points": [
+            13.8,
+            751.175,
+            14.2,
+            751.575
+          ],
+          "signature": "1d654fa9bace1d9b849c068295e7fd12fa072c6a685cd430135042806a37ad46"
+        },
+        {
+          "region_pdf_points": [
+            14.2,
+            751.175,
+            581.17,
+            751.575
+          ],
+          "signature": "0cf8693674419955df00e28c219282eb77c79635762666ceb464eebefd0a2e04"
+        },
+        {
+          "region_pdf_points": [
+            581.17,
+            178.455,
+            581.57,
+            751.175
+          ],
+          "signature": "fadd299d88ea3689bb730c6e25b5ad7d55a0435aeff205a7e105c0f108dad0e9"
+        },
+        {
+          "region_pdf_points": [
+            581.17,
+            751.175,
+            581.57,
+            751.575
+          ],
+          "signature": "9931712d99567e5a9024998bee18a8a6a9e574fd7c7f990b332f546ed72a782c"
+        },
+        {
+          "region_pdf_points": [
+            581.17,
+            751.175,
+            581.57,
+            751.575
+          ],
+          "signature": "9931712d99567e5a9024998bee18a8a6a9e574fd7c7f990b332f546ed72a782c"
+        }
+      ]
+    }
+  ]
+}

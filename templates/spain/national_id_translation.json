@@ -1,0 +1,712 @@
+{
+  "schema_version": 1,
+  "template_id": "spain.national_id_translation",
+  "country": "Spain",
+  "reference_filename": "National_ID_Translation.pdf",
+  "reference_sha256": "7218223f04bdf852600971964d519b5f01e03afe8cdd7e9b9fc1399b5c1e7f2f",
+  "pages": 1,
+  "interactive_pdf_fields": 0,
+  "status": "blank_template_mapped_awaiting_filled_sample",
+  "coordinate_system": "PDF points, origin top-left; page is 1-based; normalized regions also included",
+  "labels_note": "Labels are normalized descriptions of the printed field or a component of a compound field; baseline_region_text preserves original wording.",
+  "limitations": [
+    "These are values in the inspected blank reference, not extracted completed answers.",
+    "Printed labels, declaration paragraphs and checkbox options are template text, never applicant values.",
+    "A null checkbox/selection means no marked answer was observed in the blank reference.",
+    "Shared answer regions require splitting after filled examples are inspected.",
+    "Scanned/handwritten/flattened variants need OCR or visual checks; signatures are presence checks only.",
+    "Never copy an answer from another document to fill a blank here."
+  ],
+  "fields": [
+    {
+      "key": "holder.full_name",
+      "label": "Full Name",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        102,
+        217,
+        532,
+        243
+      ],
+      "value_type": "text",
+      "options": [],
+      "subject_role": "id_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.166667,
+        0.27399,
+        0.869281,
+        0.306818
+      ],
+      "baseline_region_text": "Full Name:"
+    },
+    {
+      "key": "holder.address",
+      "label": "Address",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        102,
+        243,
+        532,
+        268
+      ],
+      "value_type": "text",
+      "options": [],
+      "subject_role": "id_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.166667,
+        0.306818,
+        0.869281,
+        0.338384
+      ],
+      "baseline_region_text": "Address:"
+    },
+    {
+      "key": "holder.front_id_number",
+      "label": "ID Number",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        102,
+        268,
+        350,
+        302
+      ],
+      "value_type": "identifier",
+      "options": [],
+      "subject_role": "id_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.166667,
+        0.338384,
+        0.571895,
+        0.381313
+      ],
+      "baseline_region_text": "ID Number:                         D"
+    },
+    {
+      "key": "holder.date_of_birth",
+      "label": "Date of Birth",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        350,
+        268,
+        532,
+        302
+      ],
+      "value_type": "date",
+      "options": [],
+      "subject_role": "id_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.571895,
+        0.338384,
+        0.869281,
+        0.381313
+      ],
+      "baseline_region_text": "Date of Birth:"
+    },
+    {
+      "key": "holder.full_id_number",
+      "label": "Full ID Number",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        102,
+        470,
+        400,
+        496
+      ],
+      "value_type": "identifier",
+      "options": [],
+      "subject_role": "id_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.166667,
+        0.593434,
+        0.653595,
+        0.626263
+      ],
+      "baseline_region_text": "Full ID Number:                                                     Is"
+    },
+    {
+      "key": "holder.issue_date",
+      "label": "Issue Date",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        400,
+        470,
+        532,
+        496
+      ],
+      "value_type": "date_or_year_month",
+      "options": [],
+      "subject_role": "id_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.653595,
+        0.593434,
+        0.869281,
+        0.626263
+      ],
+      "baseline_region_text": "sue Date:"
+    },
+    {
+      "key": "holder.current_job",
+      "label": "Current Job",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        102,
+        496,
+        532,
+        523
+      ],
+      "value_type": "text",
+      "options": [],
+      "subject_role": "id_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.166667,
+        0.626263,
+        0.869281,
+        0.660354
+      ],
+      "baseline_region_text": "Current Job:"
+    },
+    {
+      "key": "holder.gender",
+      "label": "Gender",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        102,
+        523,
+        532,
+        550
+      ],
+      "value_type": "text",
+      "options": [],
+      "subject_role": "id_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.166667,
+        0.660354,
+        0.869281,
+        0.694444
+      ],
+      "baseline_region_text": "Gender:"
+    },
+    {
+      "key": "holder.religion",
+      "label": "Religion",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        102,
+        550,
+        532,
+        576
+      ],
+      "value_type": "text",
+      "options": [],
+      "subject_role": "id_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.166667,
+        0.694444,
+        0.869281,
+        0.727273
+      ],
+      "baseline_region_text": "Religion:"
+    },
+    {
+      "key": "holder.marital_status",
+      "label": "Marital Status",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        102,
+        576,
+        532,
+        604
+      ],
+      "value_type": "text",
+      "options": [],
+      "subject_role": "id_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.166667,
+        0.727273,
+        0.869281,
+        0.762626
+      ],
+      "baseline_region_text": "Marital Status:"
+    },
+    {
+      "key": "holder.expiry_date",
+      "label": "Expiry Date",
+      "question_number": null,
+      "page": 1,
+      "region_pdf_points": [
+        102,
+        604,
+        532,
+        636
+      ],
+      "value_type": "date_or_year_month",
+      "options": [],
+      "subject_role": "id_holder",
+      "condition": null,
+      "value": null,
+      "value_status": "blank_in_reference",
+      "shared_answer_region": false,
+      "region_normalized": [
+        0.166667,
+        0.762626,
+        0.869281,
+        0.80303
+      ],
+      "baseline_region_text": "Expiry Date:"
+    }
+  ],
+  "baseline_pages": [
+    {
+      "page": 1,
+      "width": 612.0,
+      "height": 792.0,
+      "printed_text": "                      Arab Republic of Egypt\n\n                           Personal ID Card\n\n Full Name:\n\n  Address:\n\nID Number:                                Date of Birth:\n\n\n\n\n\nFull ID Number:                                         Issue Date:\n\nCurrent Job:\n\nGender:\n\nReligion:\n\nMarital Status:\n\nExpiry Date:",
+      "lines": [
+        {
+          "text": "Arab Republic of Egypt",
+          "region_pdf_points": [
+            101.54,
+            170.78,
+            350.422,
+            182.78
+          ]
+        },
+        {
+          "text": "Personal ID Card",
+          "region_pdf_points": [
+            101.54,
+            195.5,
+            330.502,
+            207.5
+          ]
+        },
+        {
+          "text": "Full Name:",
+          "region_pdf_points": [
+            101.54,
+            220.1,
+            160.412,
+            232.1
+          ]
+        },
+        {
+          "text": "Address:",
+          "region_pdf_points": [
+            101.54,
+            244.802,
+            158.497,
+            256.826
+          ]
+        },
+        {
+          "text": "ID Number:                                                                      Date of Birth:",
+          "region_pdf_points": [
+            101.54,
+            269.45,
+            421.702,
+            281.45
+          ]
+        },
+        {
+          "text": "Full ID Number:                                                                              Issue Date:",
+          "region_pdf_points": [
+            102.38,
+            472.87,
+            452.542,
+            484.87
+          ]
+        },
+        {
+          "text": "Current Job:",
+          "region_pdf_points": [
+            102.38,
+            499.63,
+            168.692,
+            511.63
+          ]
+        },
+        {
+          "text": "Gender:",
+          "region_pdf_points": [
+            102.38,
+            526.51,
+            145.292,
+            538.51
+          ]
+        },
+        {
+          "text": "Religion:",
+          "region_pdf_points": [
+            102.38,
+            553.39,
+            148.652,
+            565.39
+          ]
+        },
+        {
+          "text": "Marital Status:",
+          "region_pdf_points": [
+            102.38,
+            576.682,
+            181.604,
+            593.338
+          ]
+        },
+        {
+          "text": "Expiry Date:",
+          "region_pdf_points": [
+            102.38,
+            607.06,
+            252.362,
+            619.06
+          ]
+        }
+      ],
+      "words": [
+        {
+          "text": "Arab",
+          "region_pdf_points": [
+            234.53,
+            170.78,
+            258.47,
+            182.78
+          ]
+        },
+        {
+          "text": "Republic",
+          "region_pdf_points": [
+            261.134,
+            170.78,
+            304.142,
+            182.78
+          ]
+        },
+        {
+          "text": "of",
+          "region_pdf_points": [
+            306.794,
+            170.78,
+            317.042,
+            182.78
+          ]
+        },
+        {
+          "text": "Egypt",
+          "region_pdf_points": [
+            319.742,
+            170.78,
+            347.534,
+            182.78
+          ]
+        },
+        {
+          "text": "Personal",
+          "region_pdf_points": [
+            245.45,
+            195.5,
+            288.578,
+            207.5
+          ]
+        },
+        {
+          "text": "ID",
+          "region_pdf_points": [
+            291.362,
+            195.5,
+            302.15,
+            207.5
+          ]
+        },
+        {
+          "text": "Card",
+          "region_pdf_points": [
+            304.778,
+            195.5,
+            327.77,
+            207.5
+          ]
+        },
+        {
+          "text": "Full",
+          "region_pdf_points": [
+            104.3,
+            220.1,
+            122.12,
+            232.1
+          ]
+        },
+        {
+          "text": "Name:",
+          "region_pdf_points": [
+            124.904,
+            220.1,
+            157.736,
+            232.1
+          ]
+        },
+        {
+          "text": "Address:",
+          "region_pdf_points": [
+            112.46,
+            244.802,
+            155.843,
+            256.826
+          ]
+        },
+        {
+          "text": "ID",
+          "region_pdf_points": [
+            101.54,
+            269.45,
+            112.328,
+            281.45
+          ]
+        },
+        {
+          "text": "Number:",
+          "region_pdf_points": [
+            115.076,
+            269.45,
+            159.164,
+            281.45
+          ]
+        },
+        {
+          "text": "Date",
+          "region_pdf_points": [
+            349.15,
+            269.45,
+            372.79,
+            281.45
+          ]
+        },
+        {
+          "text": "of",
+          "region_pdf_points": [
+            375.538,
+            269.45,
+            385.786,
+            281.45
+          ]
+        },
+        {
+          "text": "Birth:",
+          "region_pdf_points": [
+            388.594,
+            269.45,
+            416.422,
+            281.45
+          ]
+        },
+        {
+          "text": "Full",
+          "region_pdf_points": [
+            102.38,
+            472.87,
+            120.308,
+            484.87
+          ]
+        },
+        {
+          "text": "ID",
+          "region_pdf_points": [
+            122.984,
+            472.87,
+            133.772,
+            484.87
+          ]
+        },
+        {
+          "text": "Number:",
+          "region_pdf_points": [
+            136.412,
+            472.87,
+            180.608,
+            484.87
+          ]
+        },
+        {
+          "text": "Issue",
+          "region_pdf_points": [
+            391.533,
+            472.87,
+            417.454,
+            484.87
+          ]
+        },
+        {
+          "text": "Date:",
+          "region_pdf_points": [
+            420.166,
+            472.87,
+            447.118,
+            484.87
+          ]
+        },
+        {
+          "text": "Current",
+          "region_pdf_points": [
+            102.38,
+            499.63,
+            140.348,
+            511.63
+          ]
+        },
+        {
+          "text": "Job:",
+          "region_pdf_points": [
+            143.132,
+            499.63,
+            163.292,
+            511.63
+          ]
+        },
+        {
+          "text": "Gender:",
+          "region_pdf_points": [
+            102.38,
+            526.51,
+            142.628,
+            538.51
+          ]
+        },
+        {
+          "text": "Religion:",
+          "region_pdf_points": [
+            102.38,
+            553.39,
+            145.964,
+            565.39
+          ]
+        },
+        {
+          "text": "Marital",
+          "region_pdf_points": [
+            102.38,
+            576.682,
+            138.98,
+            593.338
+          ]
+        },
+        {
+          "text": "Status:",
+          "region_pdf_points": [
+            141.764,
+            580.15,
+            176.144,
+            592.15
+          ]
+        },
+        {
+          "text": "Expiry",
+          "region_pdf_points": [
+            102.38,
+            607.06,
+            133.232,
+            619.06
+          ]
+        },
+        {
+          "text": "Date:",
+          "region_pdf_points": [
+            135.812,
+            607.06,
+            162.764,
+            619.06
+          ]
+        }
+      ],
+      "checkboxes": [],
+      "images": [
+        {
+          "region_pdf_points": [
+            94.32,
+            168.36,
+            522.12,
+            331.8
+          ],
+          "digest": "7d12ca5c4e7131ed8e5f06329a925538"
+        },
+        {
+          "region_pdf_points": [
+            95.16,
+            453.48,
+            528.12,
+            631.8
+          ],
+          "digest": "c467a0d4aa9b370ef13c461c8862adb5"
+        }
+      ],
+      "drawings": [
+        {
+          "region_pdf_points": [
+            84.0,
+            154.46,
+            532.5,
+            345.71
+          ],
+          "signature": "ca1d45abf4fc147b80f25cdfa58fbf269bb9b20b438928ece5b72d74d3609708"
+        },
+        {
+          "region_pdf_points": [
+            84.0,
+            438.77,
+            539.25,
+            646.52
+          ],
+          "signature": "5f5fd929797d9acfbf24b9e1cb8a57213614866cf1cba1ecf201a4409a66dcec"
+        }
+      ]
+    }
+  ]
+}

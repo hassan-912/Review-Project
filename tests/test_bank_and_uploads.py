@@ -6,13 +6,11 @@ import pymupdf
 import pytest
 from PIL import Image
 import accounts
-from uploads import CATEGORIES, category_order, upload_thumbnail, files_hash
-from extractor import _classify_content, DocumentAudit
+from uploads import CATEGORIES, category_order, upload_thumbnail, files_hash, upload_slot_order, SPAIN_UPLOAD_SLOTS
+from extractor import DocumentAudit
 from finance_review import BankStatement, TripCost, grounded_financial_data, assess_budget, amount_in_quote
 from document_sources import source_manifest, unique_uploads
 from supporting_review import extraction_quality
-from context_review import parse_context
-from tests.test_context_review import context_payload
 
 
 def pdf(*pages):
@@ -22,24 +20,6 @@ def pdf(*pages):
         return doc.tobytes()
 
 
-@pytest.mark.parametrize('scanned',[False,True])
-def test_only_final_bank_page_is_sent_to_models(scanned):
-    raw=pdf('PRIVATE EARLIER TRANSACTION PAGE 1','EARLIER PAGE 2','Closing balance EGP 120000.00')
-    if scanned:
-        with pymupdf.open(stream=raw,filetype='pdf') as doc,pymupdf.open() as scan:
-            for page in doc:
-                image=page.get_pixmap().tobytes('png')
-                scan.new_page().insert_image(scan[-1].rect,stream=image)
-            raw=scan.tobytes()
-    slots,tasks,_=_classify_content({'bank_statement':[('bank.pdf',raw)]})
-    text='\n'.join(slot['text'] for slot in slots if isinstance(slot,dict) and 'text' in slot)
-    assert 'PRIVATE EARLIER' not in text and 'EARLIER PAGE 2' not in text
-    assert 'original page 3' in text
-    if not scanned and not tasks:assert 'Closing balance EGP 120000.00' in text
-    for _,_,content in tasks:
-        with pymupdf.open(stream=content,filetype='pdf') as doc:
-            assert len(doc)==1
-            if not scanned:assert 'Closing balance EGP 120000.00' in doc[0].get_text()
 
 
 def test_bank_audit_counts_only_in_scope_final_page(complete_extraction):
@@ -52,13 +32,6 @@ def test_bank_audit_counts_only_in_scope_final_page(complete_extraction):
     assert quality['files'][0]['original_pages']==2 and not issues
 
 
-def test_context_accepts_final_page_scope_and_rejects_first_page_balance():
-    payload=context_payload(('bank.pdf',));payload['document_audits'][0]['pages_read']=[3]
-    payload['bank_statements']=[{'source_file':'bank.pdf','page':3,'balance':None}]
-    manifest={'bank.pdf':{'category_hint':'bank_statement','pages':3,'review_pages':[3]}}
-    assert parse_context(json.dumps(payload),manifest)
-    payload['bank_statements'][0]['page']=1
-    with pytest.raises(ValueError):parse_context(json.dumps(payload),manifest)
 
 
 def test_previous_page_balance_and_fabricated_amount_are_rejected(complete_extraction):
@@ -126,6 +99,21 @@ def test_reorder_preserves_ids_hash_and_bank_scope():
     assert set(category_order(['flight','flight','invalid']))==set(CATEGORIES)
 
 
+@pytest.mark.parametrize('program,country',[('schengen','france'),('schengen','germany'),
+    ('schengen','italy'),('schengen','netherlands'),('schengen','sweden'),('schengen','belgium'),
+    ('schengen','greece'),('canada','spain'),('usa','spain'),('uk','spain')])
+def test_spain_only_upload_slots_are_not_added_to_other_destinations(program,country):
+    assert not set(SPAIN_UPLOAD_SLOTS).intersection(upload_slot_order(program=program,country=country))
+
+
+def test_spain_slots_follow_the_application_without_changing_saved_shared_order():
+    saved=list(reversed(CATEGORIES))
+    slots=upload_slot_order(saved)
+    index=slots.index('visa_form')+1
+    assert slots[index:index+2]==list(SPAIN_UPLOAD_SLOTS)
+    assert [slot for slot in slots if slot not in SPAIN_UPLOAD_SLOTS]==saved
+
+
 def test_thumbnail_uses_final_bank_page_and_keeps_bounded_size():
     raw=pdf('Earlier page','Final balance')
     png,page,total=upload_thumbnail('statement.pdf',raw,'bank_statement')
@@ -181,5 +169,5 @@ def test_pipeline_does_not_read_bank_pages_for_writing_or_form_checks(complete_e
     monkeypatch.setattr(review_pipeline,'extract_documents',lambda *a,**kw:d)
     monkeypatch.setattr(review_pipeline,'_extract_pdf_text',parse_text)
     monkeypatch.setattr(review_pipeline,'exchange_rates',lambda:None)
-    review_pipeline.review_documents('test',{'bank_statement':[('bank.pdf',pdf('Private earlier page','Final balance EUR 5000.00'))]})
+    review_pipeline.review_documents({'bank_statement':[('bank.pdf',pdf('Private earlier page','Final balance EUR 5000.00'))]})
     parse_text.assert_not_called()

@@ -5,7 +5,6 @@ import streamlit as st
 from i18n import t
 
 CSS = """
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
 :root {
  --brand:#0067DA; --ink:#0B1F3A; --page:#F3F7FC; --muted:#50607A; --border:#D9E2EF; --surface:#FFFFFF;
  --critical-bg:#FBE9E7; --critical:#8C1D18; --high-bg:#FFF0DC; --high:#8A4300;
@@ -23,7 +22,7 @@ h1 {font-size:2.2rem !important; line-height:1.2;}
 [data-testid="stTextInput"] input,button,[role="checkbox"],[role="radio"] {min-height:44px;}
 [data-testid="stTextInput"] [data-baseweb="input"], [data-testid="stTextArea"] textarea {border:1px solid #7B8DA6 !important; border-radius:8px; background:#FFFFFF;}
 [data-testid="stTextInput"] [data-baseweb="input"]:focus-within {border-color:var(--brand) !important; box-shadow:0 0 0 1px var(--brand);}
-.stApp *, .stApp *::before, .stApp *::after {animation:none !important; transition:none !important; scroll-behavior:auto !important;}
+.stApp *, .stApp *::before, .stApp *::after {transition:none !important; scroll-behavior:auto !important;}
 button:focus-visible,input:focus-visible {outline:3px solid var(--brand); outline-offset:3px;}
 .brand-mark {display:inline-flex; align-items:center; justify-content:center; border-radius:10px; background:var(--brand); color:var(--surface); width:46px; height:46px; font-weight:700;}
 .eyebrow {color:var(--brand); font-weight:600; font-size:.82rem;}
@@ -36,6 +35,11 @@ button:focus-visible,input:focus-visible {outline:3px solid var(--brand); outlin
 .pill.success,.pill.aligned,.pill.done {background:var(--success-bg); color:var(--success);}
 .pill.in_progress,.pill.added {background:var(--page); color:var(--brand);}
 .score-number {font-size:4rem; font-weight:700; line-height:1.2; color:var(--ink);}
+.comparison-value {padding:1rem; border-radius:10px; margin:.35rem 0; overflow-wrap:anywhere; white-space:pre-wrap; font-size:1.25rem; font-weight:600;}
+.comparison-value.incorrect {background:var(--critical-bg); color:var(--critical); border-inline-start:4px solid var(--critical);}
+.comparison-value.correct {background:var(--success-bg); color:var(--success); border-inline-start:4px solid var(--success);}
+.comparison-label {font-size:.8rem; font-weight:500; margin-bottom:.45rem;}
+.correction-files {background:#EAF2FF; color:var(--ink); border-inline-start:4px solid var(--brand); border-radius:6px; padding:.65rem .85rem; font-size:1.05rem; font-weight:600; overflow-wrap:anywhere;}
 .stepper {display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:1rem 0;}
 .step {border:1px solid var(--border); border-radius:12px; background:var(--surface); padding:1rem;}
 .step.active {border-color:var(--brand);}
@@ -50,8 +54,8 @@ button:focus-visible,input:focus-visible {outline:3px solid var(--brand); outlin
 [data-testid="stFileUploaderDropzone"] {border:1px dashed var(--border); border-radius:10px;}
 [class*="st-key-slot_filled"] [data-testid="stFileUploaderDropzone"] {border:1px solid var(--brand);}
 [data-testid="stFileUploaderDropzoneInstructions"] {display:none;}
-[data-testid="stFileUploaderDropzone"] button {font-size:0;}
-[data-testid="stFileUploaderDropzone"] button::after {font-size:.9rem;}
+[data-testid="stFileUploaderDropzone"] button[data-testid="stBaseButton-secondary"] {font-size:0;}
+[data-testid="stFileUploaderDropzone"] button[data-testid="stBaseButton-secondary"]::after {font-size:.9rem;}
 @media(max-width:640px) {.stepper {grid-template-columns:1fr 1fr;} h1 {font-size:1.8rem !important;}}
 @media(prefers-reduced-motion:reduce) {.skeleton i {animation:none;}}
 """
@@ -65,6 +69,8 @@ def direction_css(lang):
         [data-testid="stHorizontalBlock"] {direction:rtl; flex-direction:row;}
         [class*="st-key-evidence_"] [data-testid="stHorizontalBlock"] {direction:ltr;}
         [class*="st-key-evidence_"] [data-testid="stColumn"] {direction:rtl;}
+        [class*="st-key-usa_comparison_"] [data-testid="stHorizontalBlock"] {direction:ltr;}
+        [class*="st-key-usa_comparison_"] [data-testid="stColumn"] {direction:rtl;}
         .stepper {direction:rtl;}
         .stMain h1,.stMain h2,.stMain h3 {text-align:right; letter-spacing:0 !important;}
         [data-testid="stDataFrame"] {direction:rtl;}
@@ -75,4 +81,4 @@ def direction_css(lang):
 def inject_theme(lang="en"):
     caption = json.dumps(t("choose_files", lang), ensure_ascii=False)
     st.html("<style>" + CSS + direction_css(lang) +
-            '[data-testid="stFileUploaderDropzone"] button::after {content:' + caption + ';}</style>')
+            '[data-testid="stFileUploaderDropzone"] button[data-testid="stBaseButton-secondary"]::after {content:' + caption + ';}</style>')

@@ -7,8 +7,6 @@ import pytest
 import accounts
 from appointment_review import appointment_issues, ground_appointments
 from extractor import AppointmentInfo, SourceField
-from billing import event_cost, summarize_costs
-from model_routing import ModelRouter
 
 
 def appointment(**values):
@@ -70,42 +68,14 @@ def test_invented_appointment_is_discarded_and_unreadable_letter_is_visible(comp
     assert len(data.appointments)==1 and data.appointments[0].appointment_date is None
 
 
-def cost_event(**values):
-    return dict(dict(id='event',model='gemini-3.8-flash',review_id='review',created_at='2026-10-19T12:00:00Z',
-                status='success',billing_mode='paid',input_tokens=30000,output_tokens=5000,cached_input_tokens=0,
-                input_usd_per_million='0.75',cached_usd_per_million='0.075',output_usd_per_million='3.75'),**values)
 
 
-def test_cost_math_free_vs_paid_and_cached_input():
-    assert event_cost(cost_event())==Decimal('0.04125')
-    assert event_cost(cost_event(cached_input_tokens=10000))==Decimal('0.0345')
-    result=summarize_costs([cost_event(),cost_event(id='free',billing_mode='free')])
-    assert result['paid']==Decimal('0.04125') and result['projected']==Decimal('0.0825')
-    assert result['reviews']['review']['requests']==2
 
 
-def test_unknown_usage_not_invented_zero_and_errors_with_usage_still_cost():
-    result=summarize_costs([cost_event(input_tokens=None),cost_event(status='invalid_response'),cost_event(billing_mode='unknown')])
-    assert result['unknown']==2 and result['paid']==Decimal('0.04125')
-    assert result['details'][0]['estimated_paid_usd'] is None
-    assert result['details'][2]['estimated_paid_usd'] is None
 
 
-def test_rate_snapshot_does_not_reprice_previous_requests():
-    assert event_cost(cost_event(input_usd_per_million='1.5',output_usd_per_million='7.5'))==2*event_cost(cost_event())
 
 
-def test_model_usage_includes_thinking_and_links_attempt():
-    db=Mock();db.table.return_value.select.return_value.order.return_value.execute.return_value.data=[]
-    router=ModelRouter(db,'user',review_id='review')
-    router.reserve('gemini-3.8-flash',100)
-    assert db.rpc.call_args.args[1]['p_review_id']=='review'
-    response=SimpleNamespace(usage_metadata=SimpleNamespace(prompt_token_count=100,total_token_count=150,candidates_token_count=20,thoughts_token_count=30,cached_content_token_count=10))
-    router.finish('event','success',response)
-    assert db.rpc.call_args.args[1]['p_output']==50
-    assert db.rpc.call_args.args[1]['p_cached_input']==10
-    router.finish('event','failed',SimpleNamespace(usage_metadata=SimpleNamespace()))
-    assert db.rpc.call_args.args[1]['p_output'] is None
 
 
 def test_maintenance_rejects_reservation_before_quota_or_ai(monkeypatch):
@@ -117,8 +87,7 @@ def test_maintenance_rejects_reservation_before_quota_or_ai(monkeypatch):
     db.rpc.assert_not_called()
 
 
-@pytest.mark.parametrize('function,args',[(accounts.set_maintenance,(True,)),(accounts.billing_settings,()),
-    (accounts.save_billing_settings,('paid',25)),(accounts.cost_events,(None,None))])
+@pytest.mark.parametrize('function,args',[(accounts.set_maintenance,(True,))])
 def test_sensitive_admin_functions_recheck_super_role(monkeypatch,function,args):
     check=Mock(side_effect=accounts.AccountError('access_revoked'));monkeypatch.setattr(accounts,'verified_actor',check)
     db=Mock();monkeypatch.setattr(accounts,'admin_client',db)

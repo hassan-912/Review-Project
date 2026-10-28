@@ -4,13 +4,23 @@ from __future__ import annotations
 import re
 import time
 import uuid
+from functools import lru_cache
 from dataclasses import dataclass
+from datetime import datetime,timedelta,timezone
+from zoneinfo import ZoneInfo
 from supabase import ClientOptions, create_client
-from settings import setting, positive_int
+from settings import setting
 
 
 class AccountError(RuntimeError):
     pass
+
+
+class ReviewLimitError(AccountError):
+    def __init__(self,period,details):
+        super().__init__('rate_limited')
+        self.period=period
+        self.details=details
 
 
 # Supabase Auth clamps configured minimums below six to six.
@@ -29,7 +39,12 @@ def admin_client():
     url, key = setting("SUPABASE_URL"), setting("SUPABASE_SERVICE_ROLE_KEY")
     if not url or not key:
         raise AccountError("config_missing")
-    # This client never signs in as a user; its service-role headers remain server-side.
+    return _service_client(url,key)
+
+
+@lru_cache(maxsize=1)
+def _service_client(url,key):
+    # Reuse the connection pool. User auth clients remain isolated per browser.
     return create_client(url, key, options=ClientOptions(auto_refresh_token=False, persist_session=False))
 
 
@@ -62,6 +77,12 @@ class Actor:
     approved: bool
     role: str
     username: str = ""
+    hourly_limit: int = 5
+    daily_limit: int = 5
+
+    @property
+    def unlimited_reviews(self):
+        return self.approved and self.role in ('admin','super_admin')
 
 
 def verified_actor(client, session, require_admin=False, require_approved=True, require_super=False):
@@ -75,11 +96,12 @@ def verified_actor(client, session, require_admin=False, require_approved=True, 
     if user is None:
         raise AccountError("session_expired")
     try:
-        rows = admin_client().table("profiles").select("is_approved,role,username").eq("id", user.id).limit(1).execute().data
+        rows = admin_client().table("profiles").select("is_approved,role,username,hourly_limit,daily_limit").eq("id", user.id).limit(1).execute().data
     except Exception as exc:
         raise AccountError("auth_unavailable") from exc
     profile = rows[0] if rows else {}
-    actor = Actor(user.id, user.email or "", profile.get("is_approved") is True, profile.get("role", "user"), profile.get("username") or "")
+    actor = Actor(user.id, user.email or "", profile.get("is_approved") is True, profile.get("role", "user"), profile.get("username") or "",
+                  profile.get('hourly_limit',5),min(5,profile.get('daily_limit',5)))
     if (require_approved and not actor.approved or require_admin and (not actor.approved or actor.role not in ("admin","super_admin"))
             or require_super and (not actor.approved or actor.role != "super_admin")):
         raise AccountError("access_revoked")
@@ -121,21 +143,57 @@ def reserve_review(client, session, request_id=None, client_name=""):
     actor = verified_actor(client, session)
     try:
         ensure_service_available()
-        allowed = admin_client().rpc("reserve_review_attempt", {
-            "p_user_id": actor.user_id,
-            "p_request_id": request_id or str(uuid.uuid4()),
-            "p_hourly_limit": positive_int("REVIEWS_PER_HOUR", 5),
-            "p_daily_limit": positive_int("REVIEWS_PER_DAY", 20),
-        }).execute().data
+        if actor.unlimited_reviews:
+            # The role comes from the live server-verified profile, never session
+            # claims or UI state. A real ledger row is still required for history,
+            # completion and Gemini usage; duplicate request IDs fail closed.
+            admin_client().table('review_attempts').insert({
+                'user_id':actor.user_id,'request_id':request_id or str(uuid.uuid4()),
+                'client_name':client_name,'submitted_username':actor.username,
+                'submitted_by':actor.email,'status':'running',
+            }).execute()
+            allowed=True
+        else:
+            allowed = admin_client().rpc("reserve_review_attempt", {
+                "p_user_id": actor.user_id,
+                "p_request_id": request_id or str(uuid.uuid4()),
+                "p_hourly_limit": actor.hourly_limit,
+                "p_daily_limit": min(5,actor.daily_limit),
+            }).execute().data
     except AccountError:
         raise
     except Exception as exc:
         raise AccountError("quota_unavailable") from exc
     if allowed is not True:
-        raise AccountError("rate_limited")
-    if request_id:
+        raise _review_limit_error(actor) or AccountError("rate_limited")
+    if request_id and not actor.unlimited_reviews:
         admin_client().table("review_attempts").update({"client_name":client_name,"submitted_username":actor.username,"submitted_by":actor.email,"status":"running"}).eq("request_id",request_id).eq("user_id",actor.user_id).execute()
     return actor
+
+
+def _review_limit_error(actor,now=None):
+    """Explain a denied reservation without replacing the atomic database guard."""
+    if actor.unlimited_reviews:return None
+    now=now or datetime.now(timezone.utc)
+    try:
+        rows=admin_client().table('review_attempts').select('requested_at').eq('user_id',actor.user_id).gt(
+            'requested_at',(now-timedelta(hours=24)).isoformat()).order('requested_at').limit(1000).execute().data
+        stamps=sorted(datetime.fromisoformat(row['requested_at'].replace('Z','+00:00')) for row in rows)
+        midnight=now.astimezone(ZoneInfo('Africa/Cairo')).replace(hour=0,minute=0,second=0,microsecond=0)
+        daily=[stamp for stamp in stamps if stamp>=midnight]
+        hourly=[stamp for stamp in stamps if stamp>now-timedelta(hours=1)]
+        resets=[];periods=[]
+        for label,items,limit,window in (('hourly',hourly,actor.hourly_limit,1),('daily',daily,min(5,actor.daily_limit),24)):
+            if len(items)>=limit:
+                resets.append(midnight+timedelta(days=1) if label=='daily' else items[len(items)-limit]+timedelta(hours=window))
+                periods.append(label)
+        if not resets:return None
+        return ReviewLimitError('limit_both' if len(periods)==2 else 'limit_'+periods[0],dict(
+            hour_used=len(hourly),hour_limit=actor.hourly_limit,day_used=len(daily),day_limit=min(5,actor.daily_limit),
+            retry_at=max(resets).astimezone(ZoneInfo('Africa/Cairo')).strftime('%d/%m/%Y %H:%M:%S')))
+    except Exception:
+        # Missing diagnostics must never turn a denied reservation into an allowance.
+        return None
 
 
 def set_approval(client, session, target_id: str, approved: bool):
@@ -185,7 +243,7 @@ def team_attempts(client, session):
 
 def super_update(client, session, target_id, role, approved, hourly, daily):
     actor=verified_actor(client,session,require_super=True)
-    if role not in ("user","admin","super_admin") or not 1<=hourly<=100 or not 1<=daily<=1000:
+    if role not in ("user","admin","super_admin") or not 1<=hourly<=100 or not 1<=daily<=5:
         raise AccountError("access_update_failed")
     try:
         admin_client().rpc("super_admin_update",{"p_actor":actor.user_id,"p_target":str(uuid.UUID(target_id)),
@@ -194,27 +252,10 @@ def super_update(client, session, target_id, role, approved, hourly, daily):
         raise AccountError("access_update_failed") from exc
 
 
-def model_router(client,session,review_id=None):
-    from model_routing import ModelRouter
-    actor=verified_actor(client,session)
-    return ModelRouter(admin_client(),actor.user_id,review_id=review_id)
 
 
-def model_dashboard(client,session):
-    actor=verified_actor(client,session,require_super=True)
-    return admin_client().rpc("model_usage_overview",{"p_actor":actor.user_id}).execute().data
 
 
-def configure_model(client,session,model,enabled,priority,rpm,tpm,rpd):
-    from model_routing import FREE_MODELS
-    actor=verified_actor(client,session,require_super=True)
-    if model not in FREE_MODELS:
-        raise AccountError("access_update_failed")
-    try:
-        admin_client().rpc("configure_free_model",{"p_actor":actor.user_id,"p_model":model,"p_enabled":enabled,
-            "p_priority":priority,"p_rpm":rpm,"p_tpm":tpm,"p_rpd":rpd}).execute()
-    except Exception as exc:
-        raise AccountError("access_update_failed") from exc
 
 
 def set_reviews_enabled(client,session,enabled):
@@ -240,7 +281,7 @@ def save_upload_category_order(client,session,order):
 def service_controls():
     """Server-only read; no credential or applicant information is returned."""
     try:
-        rows = admin_client().table('app_controls').select('maintenance_enabled,reviews_enabled').eq('id',True).limit(1).execute().data
+        rows = admin_client().table('app_controls').select('maintenance_enabled,reviews_enabled,upload_category_order').eq('id',True).limit(1).execute().data
         if not rows or not isinstance(rows[0].get('maintenance_enabled'),bool):
             raise ValueError('Missing service controls')
         return rows[0]
@@ -252,6 +293,8 @@ def ensure_service_available():
     controls = service_controls()
     if controls['maintenance_enabled']:
         raise AccountError('maintenance_message')
+    if not controls['reviews_enabled']:
+        raise AccountError('reviews_closed')
     return controls
 
 
@@ -260,29 +303,31 @@ def set_maintenance(client,session,enabled):
     admin_client().rpc('set_maintenance_mode',{'p_actor':actor.user_id,'p_enabled':bool(enabled)}).execute()
 
 
-def billing_settings(client,session):
-    verified_actor(client,session,require_super=True)
-    return admin_client().table('app_controls').select('billing_mode,monthly_budget_usd').eq('id',True).single().execute().data
+def reserve_gemini_usage(client,session,attempt_id,event):
+    actor=verified_actor(client,session)
+    ensure_service_available()
+    allowed=admin_client().rpc('reserve_gemini_usage',dict(
+        p_user_id=actor.user_id,p_review_id=attempt_id,p_event=event)).execute().data
+    if allowed is not True:raise AccountError('quota_unavailable')
+    return actor
 
 
-def save_billing_settings(client,session,mode,budget):
-    actor = verified_actor(client,session,require_super=True)
-    if mode not in ('free','paid') or not 0 < float(budget) <= 100000:
-        raise AccountError('access_update_failed')
-    admin_client().rpc('set_billing_tracking',{'p_actor':actor.user_id,'p_mode':mode,'p_budget':float(budget)}).execute()
+def finish_gemini_usage(event_id,user_id,values):
+    # The request was authorized at reservation. Record its bill even if access was revoked
+    # during generation; private findings are independently reauthorized before display.
+    from tenacity import retry,stop_after_attempt,wait_fixed
+    @retry(stop=stop_after_attempt(3),wait=wait_fixed(.2),reraise=True)
+    def save():
+        admin_client().table('gemini_review_usage').update(values).eq('id',event_id).eq('user_id',user_id).execute()
+    save()
 
 
-def cost_events(client,session,start,end):
-    verified_actor(client,session,require_super=True)
-    rows = []
-    offset = 0
-    # Page through the full period: a UI row limit must not silently understate spend.
+def gemini_usage_rows(client,session,start,end):
+    verified_actor(client,session,require_admin=True)
+    rows=[];offset=0
     while True:
-        page = admin_client().table('model_usage_events').select(
-            'id,model,user_id,review_id,created_at,status,input_tokens,output_tokens,cached_input_tokens,'
-            'billing_mode,input_usd_per_million,cached_usd_per_million,output_usd_per_million'
-        ).gte('created_at',start.isoformat()).lt('created_at',end.isoformat()).order('created_at').order('id').range(offset,offset+999).execute().data or []
+        page=admin_client().table('gemini_review_usage').select('*').gte('created_at',start).lt(
+            'created_at',end).order('created_at',desc=True).order('id').range(offset,offset+499).execute().data or []
         rows.extend(page)
-        if len(page) < 1000:
-            return rows
-        offset += len(page)
+        if len(page)<500:return rows
+        offset+=500

@@ -7,10 +7,75 @@ STRINGS = {}
 def _add(key, en, ar):
     STRINGS[key] = {"en": en, "ar": ar}
 
+_add("reasoning_title","Motivation letter and travel plan reasoning","مراجعة منطق خطاب الدافع وخطة الرحلة")
+_add("reasoning_scope","AI reasoning is advisory and does not change the factual score. Every finding needs source evidence.","مراجعة الذكاء الاصطناعي استرشادية ولا تغير درجة التحقق من الوقائع. يجب أن يستند كل تعليق إلى دليل من المستندات.")
+_add("reasoning_prepare","Prepare narrative review","تجهيز مراجعة النصوص")
+_add("reasoning_reading","Reading the supplied documents locally…","جارٍ قراءة المستندات محلياً…")
+_add("reasoning_prepare_failed","The complete file could not be prepared safely. Check readability or reduce the document set; no partial file was sent.","تعذر تجهيز الملف كاملاً بأمان. تحقق من وضوح المستندات أو قلل عددها؛ لم يُرسل ملف جزئي.")
+_add("reasoning_not_started","Prepare the review to include the letter, travel plan and other supplied documents.","جهّز المراجعة لتشمل الخطاب وخطة الرحلة وبقية المستندات المرفقة.")
+_add("reasoning_prepare_again","Prepare the packet again to use the selected language.","أعد تجهيز الملف لاستخدام اللغة المحددة.")
+_add("reasoning_run","Run / retry AI reasoning","تشغيل مراجعة الذكاء الاصطناعي أو إعادة المحاولة")
+_add("reasoning_running","Reviewing document logic and checking proposed findings…","جارٍ مراجعة منطق المستندات والتحقق من التعليقات المقترحة…")
+_add("reasoning_unavailable","The reviewer could not finish. Your documents remain in this session. Restore the model service, then run / retry the reasoning review.","تعذر إكمال المراجعة. تظل المستندات في هذه الجلسة. أعد تشغيل خدمة النموذج ثم حاول مجدداً.")
+_add("reasoning_partial","Narrative review is incomplete. Inspect the limitations before relying on its findings.","مراجعة النصوص غير مكتملة. راجع القيود قبل الاعتماد على النتائج.")
+_add("reasoning_no_findings","No source-grounded concerns were retained. This is not a guarantee that the application or itinerary is correct.","لم تُعتمد ملاحظات مستندة إلى أدلة. هذا لا يضمن صحة الطلب أو برنامج الرحلة.")
+_add("reasoning_suggestion","Suggested edit / action","التعديل أو الإجراء المقترح")
+_add("reasoning_limitations","Narrative review limitations","قيود مراجعة النصوص")
+_add("reasoning_download","Download narrative review (JSON)","تنزيل مراجعة النصوص (JSON)")
+_add("reasoning_kind_contradiction","Possible contradiction — review the quoted sources","تعارض محتمل — راجع المصادر المقتبسة")
+_add("reasoning_kind_coherence","Logic / coherence suggestion","اقتراح لتحسين المنطق والترابط")
+_add("reasoning_kind_clarity","Clarity suggestion","اقتراح لتحسين الوضوح")
+_add("reasoning_kind_unsupported_claim","Supporting evidence needs verification","يحتاج الدليل المؤيد إلى التحقق")
+_add("reasoning_kind_needs_verification","Needs manual verification","يحتاج إلى تحقق يدوي")
+
+
+_add('local_values','Extracted document values','البيانات المقروءة من المستندات')
+_add('local_values_hint','Readings marked for verification are provisional and cannot establish a confirmed mismatch.','القراءات التي تحتاج إلى التحقق مؤقتة ولا تثبت وجود اختلاف مؤكد.')
+_add('local_field_read','Read from the document','مقروء من المستند')
+_add('local_field_verify','Needs verification against the original','يحتاج إلى التحقق من الأصل')
+_add('local_unsupported','This template needs manual verification.','يتطلب هذا القالب تحققاً يدوياً.')
+_add('local_download','Download extracted values (JSON)','تنزيل البيانات المقروءة (JSON)')
+_add('local_template_hint','Only supported local templates are read automatically. Unsupported layouts require manual verification.','تُقرأ القوالب المحلية المدعومة تلقائياً فقط. تحتاج التنسيقات غير المدعومة إلى تحقق يدوي.')
+_add('trip_type','Trip category','فئة الرحلة')
+_add('trip_tourism','Tourism','سياحة')
+_add('trip_business','Business','أعمال')
+_add('review_starting','Starting document review…','جارٍ بدء مراجعة المستندات…')
+_add('corrections_title','Corrections needed ({count})','التعديلات المطلوبة ({count})')
+_add('incorrect_value','Found in the document','القيمة الموجودة في المستند')
+_add('correct_value','Expected value','القيمة المطلوبة')
+_add('missing_value','Missing','غير موجود')
+_add('passport_upload_missing','No passport was uploaded. Add the passport image or PDF in the Passport section, then run the review again.','لم يتم رفع جواز السفر. أضف صورة الجواز أو ملف PDF في خانة جواز السفر، ثم أعد تشغيل المراجعة.')
+_add('reference_source','Reference','المصدر المرجعي')
+_add('no_confirmed_mismatches','No confirmed errors in the completed checks.','لا توجد أخطاء مؤكدة في عمليات التحقق المكتملة.')
+_add('verification_notice','Review incomplete: {count} checks need verification. They are not confirmed errors.','المراجعة غير مكتملة: تحتاج {count} من عمليات التحقق إلى مراجعة. هذه ليست أخطاء مؤكدة.')
+_add('verification_details','Checks needing verification','عمليات التحقق التي تحتاج إلى مراجعة')
+_add('origin_local_key_value','Local key/value comparison','مطابقة محلية للمفاتيح والقيم')
+_add('origin_local_rule','Local validation rule','قاعدة تحقق محلية')
+_add('origin_unknown','Review method was not recorded for this result. Rerun the review for a check receipt.','لم تُسجّل طريقة المراجعة لهذه النتيجة. أعد المراجعة للحصول على سجل التحقق.')
+_add('narrative_advice','Cover letter and travel plan suggestions','مقترحات الخطاب التوضيحي وخطة الرحلة')
+_add('how_checked','How this was checked','كيف تم التحقق')
+_add('proof_hint','The receipt records local parsers, file hashes and compared keys and values.','يسجل السجل أدوات القراءة المحلية وبصمات الملفات والمفاتيح والقيم المقارنة.')
+_add('download_receipt','Download check receipt (JSON)','تنزيل سجل التحقق (JSON)')
+_add('download_corrections','Download corrections (PDF)','تنزيل التعديلات (PDF)')
+_add('error_region_unavailable','The exact field could not be located for a screenshot.','تعذر تحديد موضع الحقل بدقة لعرض صورة منه.')
+_add('gap_required_coverage','Accommodation needed for these dates','الإقامة المطلوبة لهذه الفترة')
+_add('permissions_and_limits','Permissions and review limits','الصلاحيات وحدود المراجعات')
+_add('review_limits_summary','Saved limits: {hour}/hour · {day}/24 hours','الحدود المحفوظة: {hour} في الساعة · {day} خلال 24 ساعة')
+_add('admin_reviews_unlimited','Unlimited reviews for admins — no hourly or daily cap.','مراجعات غير محدودة للمسؤولين — بدون حد بالساعة أو باليوم.')
+_add('restoring_session','Restoring your sign-in…','جارٍ استعادة تسجيل الدخول…')
+_add('review_limits_hint','Both limits apply independently. Raising the hourly limit does not raise the 24-hour allowance. Usage falls as each review leaves its rolling time window.','يُطبق الحدّان بصورة مستقلة. رفع الحد في الساعة لا يرفع حد المراجعات خلال 24 ساعة. ينخفض الاستخدام تدريجياً بخروج كل مراجعة من فترتها الزمنية.')
+_add('permissions_updated','Permissions and review limits saved.','تم حفظ الصلاحيات وحدود المراجعات.')
+_add('review_attempts_hint','Failed or interrupted review attempts also count toward these limits.','تُحتسب محاولات المراجعة الفاشلة أو المتوقفة أيضاً ضمن هذه الحدود.')
+_add('limit_hourly','Hourly review limit reached','تم بلوغ الحد في الساعة')
+_add('limit_daily','24-hour review limit reached','تم بلوغ الحد خلال 24 ساعة')
+_add('limit_both','Hourly and 24-hour review limits reached','تم بلوغ الحد في الساعة وخلال 24 ساعة')
+_add('rate_limited_details','{period}. Used: {hour_used}/{hour_limit} in the last hour; {day_used}/{day_limit} in the last 24 hours. Next available after {retry_at} (Cairo), if limits and usage stay unchanged.','{period}. الاستخدام: {hour_used}/{hour_limit} في آخر ساعة؛ {day_used}/{day_limit} في آخر 24 ساعة. أقرب وقت متاح بعد {retry_at} بتوقيت القاهرة، إذا لم تتغير الحدود أو الاستخدام.')
+_add('maintenance_hint','Pauses customer access and new reviews. Administrators can resume the website here.','يوقف وصول العملاء والمراجعات الجديدة. يمكن للمسؤول الرئيسي إعادة تشغيل الموقع من هنا.')
+
 
 _add('doc_bank_statement','Bank statement','كشف الحساب البنكي')
 _add('doc_other','Other trip costs','مصروفات الرحلة الأخرى')
-_add('bank_scope','Only the final page is read for the last available or closing balance. Earlier transactions are excluded.','تُقرأ الصفحة الأخيرة فقط لاستخراج آخر رصيد متاح أو ختامي، دون تحليل المعاملات السابقة.')
+_add('bank_scope','Bank statements need a supported local template. Until configured, the final balance requires manual verification.','تحتاج كشوف الحساب إلى قالب قراءة محلي مدعوم. حتى إضافته، يتطلب الرصيد الأخير تحققاً يدوياً.')
 _add('bank_budget','Bank balance and trip budget','الرصيد البنكي وميزانية الرحلة')
 _add('balance_available','Final available balance','آخر رصيد متاح')
 _add('balance_closing','Final closing balance','آخر رصيد ختامي')
@@ -100,7 +165,7 @@ _COPY = [
     ("completed", "Completed", "مكتملة"),
     ("failed", "Failed", "فشلت"),
     ("legacy", "Earlier attempt", "محاولة سابقة"),
-    ("combined_hint", "Cover letter and travel plan may share one file. Upload it once in either slot; sections are identified from their content. Upload national ID under Supporting documents when relevant.", "يمكن أن يحتوي ملف واحد على الخطاب التوضيحي وخطة الرحلة. ارفعه مرة واحدة في أي من الخانتين؛ تُحدد الأقسام من محتواها. أرفق بطاقة الهوية ضمن المستندات الداعمة عند الحاجة."),
+    ("combined_hint", "Upload each document in its matching section. Use the separate National ID translation and Bank declaration sections; put all HR files under Employment documents. Cover letter and travel plan may share one file.", "ارفع كل مستند في الخانة المخصصة له. استخدم خانتي ترجمة بطاقة الرقم القومي والإقرار البنكي، وارفع جميع ملفات العمل والراتب والإجازة ضمن مستندات العمل. يمكن جمع الخطاب التوضيحي وخطة الرحلة في ملف واحد."),
     ("writing_title", "Suggested document edits", "التعديلات المقترحة للمستندات"),
     ("writing_note", "Writing advice does not change the score. Verify every quote and proposed fact against the originals before editing.", "لا تغير توصيات الصياغة الدرجة. تحقق من كل اقتباس ومعلومة مقترحة بالرجوع إلى الأصل قبل التعديل."),
     ("source", "Source", "المصدر"),
@@ -143,7 +208,7 @@ _COPY = [
     ("reset_title", "Choose a new password", "اختر كلمة مرور جديدة"),
     ("config_missing", "The service is not configured. Ask the administrator to complete deployment settings.", "لم يكتمل إعداد الخدمة. اطلب من المسؤول استكمال إعدادات التشغيل."),
     ("review_title", "Prepare every detail before submission", "راجع كل التفاصيل قبل تقديم الطلب"),
-    ("review_description", "Upload the application package. Get a clear, prioritised fix checklist.", "ارفع مستندات الطلب لتحصل على قائمة واضحة بالتعديلات مرتبة حسب الأولوية."),
+    ('review_description','Compare document fields and find corrections before submission. An optional narrative review checks the motivation letter and travel plan against the supplied file.','قارن بيانات المستندات وحدد التعديلات قبل التقديم. تراجع الخدمة الاختيارية منطق خطاب الدافع وخطة الرحلة بمقارنتهما مع الملف المرفق.'),
     ("client_name", "Client name", "اسم العميل"),
     ("client_placeholder", "Applicant's full name", "الاسم الكامل لمقدم الطلب"),
     ("client_required", "Enter a client name before running the review.", "أدخل اسم العميل قبل بدء المراجعة."),
@@ -153,7 +218,6 @@ _COPY = [
     ("upload_hint", "PDF, JPG, PNG or WebP · 20 MB per file · 75 MB per review · up to 30 files", "PDF أو JPG أو PNG أو WebP · 20 ميجابايت للملف · 75 ميجابايت للمراجعة · حتى 30 ملفاً"),
     ("files_added", "{count} files added", "تمت إضافة {count} ملفات"),
     ("choose_files", "Drop or choose files", "اسحب الملفات أو اخترها"),
-    ("privacy", "Documents stay in application memory and are sent to Google Gemini for analysis. We do not save document files to disk or the database. Provider retention terms apply.", "تُعالج المستندات في ذاكرة التطبيق وتُرسل إلى Google Gemini للتحليل. لا نحفظ ملفات المستندات على القرص أو في قاعدة البيانات. تسري شروط الاحتفاظ بالبيانات لدى مزود الخدمة."),
     ("log_notice", "Review history stores the client name, destination, agent and score.", "يحفظ سجل المراجعة اسم العميل والوجهة وموظف المراجعة والدرجة."),
     ("run_review", "Run review", "بدء المراجعة"),
     ("force_refresh", "Reanalyse these documents", "إعادة تحليل المستندات"),
@@ -165,8 +229,8 @@ _COPY = [
     ("missing_hint", "Checks use the supplied evidence. Missing documents can reduce the score.", "تعتمد المراجعة على المستندات المرفقة. قد يؤدي نقص المستندات إلى خفض الدرجة."),
     ("step_read", "Read documents", "قراءة المستندات"),
     ("step_rules", "Rule checks", "فحص الاتساق"),
-    ("step_business", "Business alignment", "توافق غرض رحلة العمل"),
-    ("step_score", "Review score", "درجة المراجعة"),
+    ("step_business", "Compare document values", "مطابقة قيم المستندات"),
+    ("step_score", "Prepare corrections", "إعداد التعديلات"),
     ("done", "Done", "مكتمل"),
     ("in_progress", "In progress", "جارٍ التنفيذ"),
     ("waiting", "Waiting", "بانتظار التنفيذ"),
@@ -251,7 +315,7 @@ _COPY = [
     ("log_failed", "The report is ready, but history could not be saved.", "التقرير جاهز، لكن تعذّر حفظه في السجل."),
     ("no_results", "No matching results.", "لا توجد نتائج مطابقة."),
     ("how_description", "One package, four review steps", "حزمة مستندات واحدة، وأربع خطوات للمراجعة"),
-    ("how_read", "Read scanned and text documents together to extract structured evidence.", "قراءة المستندات المصورة والنصية معاً لاستخراج البيانات المنظمة."),
+    ('how_read','Read supported document templates locally. Unsupported layouts and unclear fields need verification. Prepare the optional narrative review to assess the letter and travel plan.','تُقرأ قوالب المستندات المدعومة محلياً. تحتاج التنسيقات غير المدعومة والبيانات غير الواضحة إلى التحقق. جهّز المراجعة الاختيارية لتقييم الخطاب وخطة الرحلة.'),
     ("how_rules", "Compare identity, dates, insurance, accommodation and employment details.", "مطابقة بيانات الهوية والتواريخ والتأمين والإقامة والعمل."),
     ("how_business", "For business trips, compare the professional sector with the stated trip purpose.", "في رحلات العمل، يُقارن القطاع المهني بالغرض المعلن من الرحلة."),
     ("how_score", "Apply the existing severity deductions and completeness bonuses, then prioritise corrections.", "تطبيق خصومات مستويات الأهمية ومكافآت اكتمال الملف، ثم ترتيب التعديلات."),
@@ -260,6 +324,8 @@ for item in _COPY:
     _add(*item)
 
 _DOCUMENTS = {
+    "ds160": ("DS-160", "نموذج DS-160"),
+    "client_form": ("Client form", "استمارة العميل"),
     "passport": ("Passport", "جواز السفر"),
     "visa_form": ("Visa application form", "نموذج طلب التأشيرة"),
     "cover_letter": ("Cover letter", "الخطاب التوضيحي"),
@@ -270,6 +336,8 @@ _DOCUMENTS = {
     "travel_plan": ("Travel plan", "خطة الرحلة"),
     "supporting": ("Supporting documents", "المستندات الداعمة"),
     "appointment": ("Embassy appointment", "موعد السفارة"),
+    "national_id_translation": ("National ID translation", "ترجمة بطاقة الرقم القومي"),
+    "bank_declaration": ("Bank declaration", "الإقرار البنكي"),
 }
 for key, pair in _DOCUMENTS.items():
     _add("doc_" + key, *pair)
@@ -346,6 +414,7 @@ def document_label(name: str, lang: str = "en") -> str:
         return name
     import re
     translations = [
+        ("DS-160", "نموذج DS-160"), ("Client Form", "استمارة العميل"),
         ("Commercial Registry", "السجل التجاري"), ("Tax Card", "البطاقة الضريبية"),
         ("Invitation Letter", "خطاب الدعوة"), ("Visa Application Form", "نموذج طلب التأشيرة"),
         ("Travel Insurance (Insured Passport No.)", "تأمين السفر (رقم جواز المؤمن عليه)"),
@@ -363,6 +432,7 @@ def document_label(name: str, lang: str = "en") -> str:
 
 # Stable IDs belong to rule constructors; English fixes retain their original precise evidence.
 ISSUE_AR = {
+    'document.not_uploaded':'لم يتم رفع المستند. أضف جواز السفر في الخانة المخصصة له، ثم أعد تشغيل المراجعة.',
     "identity.id_reference_note": "تمت قراءة الرقم القومي، لكن لا يتوفر مرجع مستقل مقروء للتحقق منه. راجعه مع أصل البطاقة عند توفره. هذه ليست مخالفة مؤكدة ولا تُخصم بسببها نقاط.",
     "identity.mismatch": "بيان الهوية لا يطابق المستند المرجعي. تحقق من الأصل وصحح النموذج أو أعد إصدار الحجز ليطابق البيانات حرفياً. لا تخمن الحروف ولا تعدّل وثيقة هوية رسمية.",
     "identity.unreadable": "البيان غير مقروء أو ملتبس ويستلزم تحققاً يدوياً. أرفق أصلاً واضحاً أو نقلاً رسمياً قبل التقديم؛ لم يُحسم هذا البيان.",
@@ -418,16 +488,13 @@ def isolated_value(value, lang):
 
 
 for item in [
-    ("auto_models","Automatic selection from four free models", "اختيار تلقائي من أربعة نماذج مجانية"),
-    ("models_unavailable","All free models are unavailable or have reached their limits. Try again after quota resets.","كل النماذج المجانية غير متاحة أو بلغت حدود الاستخدام. حاول بعد تجدد الحصة."),
     ("not_ready","Not ready — critical corrections required","غير جاهز — توجد تعديلات حرجة"),
     ("needs_attention","Needs attention — review the findings","يحتاج مراجعة — راجع الملاحظات"),
     ("checks_passed","File checks passed","اجتاز فحوصات الملف"),
     ("quality_title","Extraction and source coverage","استخراج البيانات وتغطية المصادر"),
-    ("quality_note","Completeness measures populated fields, not accuracy. Page coverage is reported by the model. Check the original evidence for uncertain or conflicting fields.","الاكتمال يقيس الحقول المستخرجة وليس دقتها. تغطية الصفحات مبنية على تقرير النموذج. راجع الأصول للحقول المتعارضة أو غير الواضحة."),
+    ('quality_note','Completeness measures populated fields, not accuracy. Check the originals for uncertain or conflicting fields.','الاكتمال يقيس الحقول المستخرجة وليس دقتها. راجع الأصول للحقول المتعارضة أو غير الواضحة.'),
     ("completeness","Field completeness","اكتمال الحقول"),
     ("pages_read","Pages reported read","الصفحات المُبلّغ عن قراءتها"),
-    ("model_used","Model used","النموذج المستخدم"),
     ("supporting_title","Supporting evidence assessment","تقييم المستندات الداعمة"),
     ("supporting_note","Checks compare the supplied documents. Consistent information does not establish authenticity or confirm facts with an issuer.","تقارن الفحوص المستندات المرفقة. توافق البيانات لا يثبت أصالة المستند ولا يؤكد الحقائق لدى جهة الإصدار."),
     ("consistent","Consistent with supplied evidence","متوافق مع المستندات المرفقة"),
@@ -437,7 +504,6 @@ for item in [
     ("correction_right","Expected value / reference","القيمة المطلوبة / المرجع"),
     ("page_preview","Original page preview; error location is not confirmed","معاينة الصفحة الأصلية؛ لم يتم تأكيد موضع الخطأ"),
     ("matched_region","Region matched to original PDF text","موضع مطابق لنص ملف PDF الأصلي"),
-    ("model_region","Region located by AI; verify the original","موضع حدده الذكاء الاصطناعي؛ راجع الأصل"),
     ("evidence_unavailable","A reliable source image could not be located. Verify this field in the original document.","تعذّر تحديد صورة مصدر موثوقة. راجع هذا البيان في المستند الأصلي."),
     ("evidence_note","Left: the actual source. Right: the expected value and available reference. The reference is not an edited or reissued document.","يساراً: المصدر الفعلي. يميناً: القيمة المطلوبة والمرجع المتاح. المرجع ليس وثيقة معدلة أو مُعاد إصدارها."),
     ("day","Day","اليوم"),
@@ -450,26 +516,7 @@ for item in [
     ("hourly_limit","Reviews per hour","المراجعات في الساعة"),
     ("daily_limit","Reviews per 24 hours","المراجعات خلال 24 ساعة"),
     ("save_changes","Save changes","حفظ التغييرات"),
-    ("model_dashboard","Models and usage","النماذج والاستخدام"),
-    ("quota_note","Counts show requests recorded by this app since tracking began, including failed attempts. Remaining is an app estimate against configured caps; usage elsewhere is excluded. Provider-wide remaining quota is unavailable here. Google may update its usage display with a delay of up to 15 minutes.","الأعداد تخص طلبات هذا التطبيق منذ بدء التتبع، وتشمل المحاولات الفاشلة. المتبقي تقدير وفق الحدود المضبوطة ولا يشمل الاستخدام خارج التطبيق. الحصة المتبقية الإجمالية لدى Google غير متاحة هنا، وقد يتأخر عرض استخدام Google حتى 15 دقيقة."),
-    ("quota_source","Quota source / last verified","مصدر الحدود / آخر تحقق"),
-    ("requests_today","App requests today","طلبات التطبيق اليوم"),
-    ("remaining_today","App-estimated requests left today","الطلبات المتبقية اليوم وفق تقدير التطبيق"),
-    ("rpm","Requests per minute","طلبات في الدقيقة"),
-    ("tpm","Input tokens per minute","رموز الإدخال في الدقيقة"),
-    ("rpd","Requests per day","طلبات في اليوم"),
-    ("requests_minute","App requests in last minute","طلبات التطبيق في آخر دقيقة"),
-    ("tokens_minute","Reserved input tokens in last minute","رموز الإدخال المحجوزة في آخر دقيقة"),
-    ("errors_today","Failed app requests today","طلبات التطبيق الفاشلة اليوم"),
-    ("input_tokens_today","Recorded input tokens today","رموز الإدخال المسجلة اليوم"),
-    ("output_tokens_today","Recorded output tokens today","رموز الإخراج المسجلة اليوم"),
-    ("pending_today","Unfinished reservations today","حجوزات الطلبات غير المكتملة اليوم"),
-    ("enabled","Enabled","مفعّل"),
-    ("priority","Routing priority (1 first)","أولوية الاختيار (1 أولاً)"),
     ("reviews_enabled","Allow new reviews","السماح بمراجعات جديدة"),
-    ("refresh_usage","Refresh usage","تحديث الاستخدام"),
-    ("quota_reset","Daily app counters reset at {date} (Cairo).","تتجدد عدادات التطبيق اليومية في {date} بتوقيت القاهرة."),
-    ("cooldown","Unavailable until {date}","غير متاح حتى {date}"),
     ("admin_audit","Administration activity","سجل إدارة التطبيق"),
 ]:
     _add(*item)
@@ -497,8 +544,6 @@ for item in [
     ('admin_reviews','Reviews','المراجعات'),
     ('admin_access','Access approval and revoke','الموافقة على الوصول وإلغاؤه'),
     ('admin_uploads','Upload categories','فئات رفع المستندات'),
-    ('admin_models','Models and usage','النماذج والاستخدام'),
-    ('admin_costs','Review costs','تكاليف المراجعات'),
     ('admin_team_log','Team review log','سجل مراجعات الفريق'),
     ('admin_maintenance','Website maintenance','صيانة الموقع'),
     ('super_admin_section','Only the super administrator can manage this section.','إدارة هذا القسم متاحة للمسؤول الرئيسي فقط.'),
@@ -506,7 +551,6 @@ for item in [
     ('reviews_closed','New reviews are paused.','المراجعات الجديدة متوقفة مؤقتاً.'),
     ('maintenance_title','Service under maintenance','الخدمة قيد الصيانة'),
     ('maintenance_message','The service is currently under maintenance. Please try again later.','الخدمة قيد الصيانة حالياً. يرجى المحاولة لاحقاً.'),
-    ('maintenance_hint','Pause customer access across the website. Only the approved super administrator keeps management access to resume service. No new reviews can start during maintenance. Existing sessions check within 15 seconds; a request already sent to Google may still finish and incur usage.','أوقف وصول العملاء إلى الموقع. يبقى وصول الإدارة للمسؤول الرئيسي المعتمد لإعادة تشغيل الخدمة. لا تبدأ مراجعات جديدة أثناء الصيانة. تتحقق الجلسات المفتوحة خلال 15 ثانية؛ وقد يكتمل طلب أُرسل إلى Google بالفعل وتُحسب تكلفته.'),
     ('website_live','The website is live.','الموقع متاح.'),
     ('pause_website','Pause website for maintenance','إيقاف الموقع للصيانة'),
     ('resume_website','Resume website','إعادة تشغيل الموقع'),
@@ -514,29 +558,216 @@ for item in [
     ('check_service','Check service status','التحقق من حالة الخدمة'),
     ('service_unavailable','Service status is unavailable. Please try again shortly.','تعذر التحقق من حالة الخدمة. يرجى المحاولة بعد قليل.'),
     ('appointment_hint','Upload the actual embassy/visa-centre appointment letter. Our planning rule requires travel to start at least 60 calendar days after the appointment; this is not an embassy processing guarantee.','ارفع خطاب موعد السفارة أو مركز التأشيرات. تشترط قاعدة التخطيط لخدمتنا بدء السفر بعد الموعد بـ60 يوماً تقويمياً على الأقل؛ وليست ضماناً لمدة معالجة السفارة.'),
-    ('cost_note','USD estimates for this app only, based on recorded input, cached input and output including thinking tokens. Rates and billing mode are saved per request. These are not Google invoices; taxes, hosting, external usage, tools and cache-storage fees are excluded. Historical requests without usage or rate snapshots remain unknown.','تقديرات بالدولار لهذا التطبيق فقط، وفق رموز الإدخال والإدخال المخزن والإخراج بما يشمل التفكير. تُحفظ الأسعار ووضع الفوترة لكل طلب. ليست فواتير Google ولا تشمل الضرائب أو الاستضافة أو الاستخدام الخارجي أو الأدوات أو تخزين الذاكرة المؤقتة. تبقى تكلفة الطلبات القديمة التي لا تتوفر لها بيانات استخدام أو أسعار غير معروفة.'),
-    ('pricing_source','Official Gemini pricing','أسعار Gemini الرسمية'),
-    ('billing_mode','Billing tracking mode','وضع تتبع الفوترة'),
-    ('billing_free','Free tier — project paid costs','المستوى المجاني — توقع التكلفة المدفوعة'),
-    ('billing_paid','Paid tier — estimate paid usage','المستوى المدفوع — تقدير الاستخدام المدفوع'),
-    ('billing_mode_hint','This changes tracking for future requests only. It does not enable Google billing, change Google quotas or charge a payment method. Switch to paid tracking only after your API project is billed.','يغير هذا التتبع للطلبات المستقبلية فقط، ولا يفعّل فوترة Google أو يغير حصصها أو يخصم من وسيلة الدفع. اختر التتبع المدفوع بعد تفعيل فوترة مشروع API.'),
-    ('monthly_budget','Monthly spending alert (USD)','تنبيه الإنفاق الشهري بالدولار'),
-    ('cost_period','Cost period (Cairo dates)','فترة التكلفة بتوقيت القاهرة'),
-    ('choose_cost_dates','Choose a start and end date.','اختر تاريخ البداية والنهاية.'),
-    ('cost_date_limit','Choose a period of at most 366 days.','اختر فترة لا تزيد عن 366 يوماً.'),
-    ('estimated_paid','Estimated paid usage (USD)','الاستخدام المدفوع المقدر بالدولار'),
-    ('projected_paid','Equivalent paid cost (USD)','التكلفة المكافئة بالمستوى المدفوع بالدولار'),
-    ('cost_requests','AI requests','طلبات الذكاء الاصطناعي'),
-    ('unknown_cost','Requests with unknown costs','طلبات بتكلفة غير معروفة'),
-    ('budget_progress','This month: ${spent} estimated / ${budget} alert threshold','هذا الشهر: تقدير ${spent} / حد التنبيه ${budget}'),
-    ('budget_hint','The monthly threshold is an alert, not a spending block. Set payment and spending controls in Google AI Studio separately.','الحد الشهري للتنبيه فقط ولا يمنع الإنفاق. اضبط الدفع وحدود الإنفاق في Google AI Studio بصورة منفصلة.'),
-    ('budget_reached','The monthly estimated spending alert threshold has been reached.','بلغ الإنفاق الشهري المقدر حد التنبيه.'),
-    ('cost_incomplete','Some costs are unknown. Displayed totals include known amounts only and may understate usage.','بعض التكاليف غير معروفة. تشمل الإجماليات المبالغ المعروفة فقط وقد تكون أقل من الاستخدام الفعلي.'),
-    ('no_cost_events','No AI requests were recorded in this period.','لم تُسجل طلبات ذكاء اصطناعي في هذه الفترة.'),
-    ('cost_by_model','Costs by model','التكاليف حسب النموذج'),
-    ('cost_by_review','Costs per review — all uploaded files','التكاليف لكل مراجعة — جميع الملفات المرفوعة'),
-    ('review_reference','Review reference','مرجع المراجعة'),
-    ('download_costs','Download cost details (CSV)','تنزيل تفاصيل التكاليف CSV'),
-    ('cost_load_failed','Cost tracking is unavailable. Refresh or check the administration database migration.','تتبع التكلفة غير متاح. حدّث الصفحة أو تحقق من تحديث قاعدة بيانات الإدارة.'),
+
 ]:
     _add(*item)
+
+for item in [
+    ('visa_program', 'Application category', 'فئة طلب التأشيرة'),
+    ('program_schengen', 'Schengen', 'شنغن'),
+    ('program_canada', 'Canada', 'كندا'),
+    ('program_usa', 'USA', 'الولايات المتحدة'),
+    ('program_uk', 'UK', 'المملكة المتحدة'),
+    ('schengen_country', 'Schengen country', 'دولة شنغن'),
+    ('country_spain', 'Spain', 'إسبانيا'),
+    ('country_france', 'France', 'فرنسا'),
+    ('country_germany', 'Germany', 'ألمانيا'),
+    ('country_italy', 'Italy', 'إيطاليا'),
+    ('country_netherlands', 'Netherlands', 'هولندا'),
+    ('country_sweden', 'Sweden', 'السويد'),
+    ('country_belgium', 'Belgium', 'بلجيكا'),
+    ('country_greece', 'Greece', 'اليونان'),
+    ('under_processing', 'Under processing', 'قيد التجهيز'),
+    ('destination_processing', '{destination} is under processing. Document uploads and reviews are not available yet.', 'خدمة {destination} قيد التجهيز. رفع المستندات ومراجعتها غير متاحين حالياً.'),
+    ('spain_workspace', 'Schengen · Spain document review', 'شنغن · مراجعة مستندات إسبانيا'),
+    ('schengen_workspace', 'Schengen · {destination} document review', 'شنغن · مراجعة مستندات {destination}'),
+    ('combined_hint_schengen', 'Upload each document in its matching section; put all HR files under Employment documents. Cover letter and travel plan may share one file.', 'ارفع كل مستند في الخانة المخصصة له، وارفع جميع ملفات العمل والراتب والإجازة ضمن مستندات العمل. يمكن جمع الخطاب التوضيحي وخطة الرحلة في ملف واحد.'),
+    ('review_scope_unavailable', 'This application category is under processing. Choose Schengen and Tourism to continue.', 'فئة الطلب هذه قيد التجهيز. اختر شنغن والسياحة للمتابعة.'),
+]:
+    _add(*item)
+
+# Gemini narrative review and token cost accounting.
+for item in [
+ ('reasoning_scope','Gemini reviews letter/plan text against locally extracted reference facts. Advisory findings do not change the factual score.','يراجع Gemini نص الخطاب والخطة مقارنة بالبيانات المستخرجة محلياً. الملاحظات استرشادية ولا تغيّر درجة التحقق.'),
+ ('reasoning_unavailable','Gemini could not finish this review. Your local results remain available.','تعذر إكمال مراجعة Gemini. تظل نتائج المراجعة المحلية متاحة.'),
+ ('gemini_config_missing','Gemini is not configured. The administrator must add GEMINI_API_KEY to server secrets.','لم يتم إعداد Gemini. يجب على المسؤول إضافة GEMINI_API_KEY إلى أسرار الخادم.'),
+ ('reasoning_extracted','Extracted reference field; verify against the original document.','بيان مرجعي مستخرج؛ راجعه في المستند الأصلي.'),
+ ('reasoning_retry_quota','A new AI review or retry uses one of your five daily reviews. The initial AI review is included in the submitted review.','تستهلك المراجعة الجديدة أو إعادة المحاولة واحدة من خمس مراجعات يومية. المراجعة الأولى بالذكاء الاصطناعي مشمولة في المراجعة المرسلة.'),
+ ('daily_limit','Reviews per Cairo day (maximum 5)','المراجعات يومياً بتوقيت القاهرة (بحد أقصى 5)'),
+ ('review_limits_hint','Maximum five reviews per user per Cairo calendar day. Resets at midnight. An hourly limit may be lower.','خمس مراجعات كحد أقصى لكل مستخدم في اليوم بتوقيت القاهرة. يتجدد الحد عند منتصف الليل. قد يكون الحد بالساعة أقل.'),
+ ('admin_costs','Gemini usage and cost','استخدام Gemini والتكلفة'),
+ ('cost_period','Period (Cairo time)','الفترة (بتوقيت القاهرة)'),
+ ('cost_today','Today','اليوم'),('cost_month','This month','هذا الشهر'),('cost_30_days','Last 30 days','آخر 30 يوماً'),
+ ('cost_users','Filter by user','تصفية حسب المستخدم'),
+ ('cost_requests','AI requests','طلبات الذكاء الاصطناعي'),
+ ('cost_input','Input tokens','رموز الإدخال'),('cost_output','Output + thinking tokens','رموز الإخراج والتفكير'),
+ ('cost_total_egp','Recorded cost (EGP)','التكلفة المسجلة (جنيه مصري)'),
+ ('cost_unavailable','Cost records are unavailable. Check the Gemini database migration and connection.','سجلات التكلفة غير متاحة. تحقق من تحديث قاعدة البيانات والاتصال.'),
+ ('cost_empty','No Gemini requests in this period. Local-only reviews have no Gemini cost.','لا توجد طلبات Gemini في هذه الفترة. المراجعات المحلية لا تستهلك Gemini.'),
+ ('cost_unknown','Usage is unknown for {usage} requests; EGP conversion is missing for {fx}. Totals exclude unknown amounts.','استخدام غير معروف لـ{usage} طلبات؛ وتحويل الجنيه غير متاح لـ{fx}. الإجماليات لا تشمل القيم المجهولة.'),
+ ('cost_rates_note','Costs are estimates from actual provider token totals, including thinking and cached-input pricing. Each request keeps its price and USD/EGP rate snapshot. Taxes and bank charges are excluded.','التكلفة تقديرية وفق الرموز الفعلية للمزود، بما فيها التفكير وتسعير الإدخال المخزن. يحتفظ كل طلب بأسعاره وسعر صرف الدولار. لا تشمل الضرائب ورسوم البنك.'),
+ ('cost_by_user','Usage by user','الاستخدام حسب المستخدم'),
+ ('cost_actual','Actual usage per review request','الاستخدام الفعلي لكل طلب مراجعة'),
+ ('cost_files','Estimated allocation per file','التوزيع التقديري لكل ملف'),
+ ('cost_allocation_note','Gemini bills the combined request. Per-file input, output and cost shares are estimates allocated by each file’s share of the sent context bytes, including shared prompt/output overhead. They sum to the request totals; they are not separately metered by Google.','يحاسب Gemini على الطلب المجمع. أنصبة الرموز والتكلفة لكل ملف تقديرية حسب حجم سياقه المرسل، مع توزيع التعليمات والإخراج المشترك. مجموعها يساوي إجمالي الطلب ولا يقيسها Google منفصلة.'),
+ ('reserved','Pending / usage unknown','قيد التنفيذ / الاستخدام غير معروف'),
+ ('cost_col_user','User','المستخدم'),('cost_col_date','Cairo time','توقيت القاهرة'),
+ ('cost_col_review_id','Review ID','معرف المراجعة'),('cost_col_status','Status','الحالة'),
+ ('cost_col_model','Model','النموذج'),('cost_col_requests','Requests','الطلبات'),
+ ('cost_col_input_tokens','Input tokens','رموز الإدخال'),('cost_col_output_tokens','Output tokens','رموز الإخراج'),
+ ('cost_col_thinking_tokens','Thinking tokens','رموز التفكير'),('cost_col_billable_output_tokens','Output + thinking','الإخراج والتفكير'),
+ ('cost_col_cached_input_tokens','Cached input tokens','رموز الإدخال المخزن'),
+ ('cost_col_cost_usd','Cost USD','التكلفة بالدولار'),('cost_col_cost_egp','Cost EGP','التكلفة بالجنيه'),
+ ('cost_col_usd_egp','USD/EGP rate','سعر الدولار بالجنيه'),('cost_col_fx_date','Rate date','تاريخ الصرف'),
+ ('cost_col_filename','File','الملف'),('cost_col_context_mode','Context sent','السياق المرسل'),
+ ('cost_col_unknown','Unknown amounts','قيم غير معروفة'),
+]:
+    _add(*item)
+_add('privacy','Files are processed in server memory. When you submit a letter or travel plan, its text and relevant supporting context are sent to Google Gemini using the paid API. Passports, applications, hotels and flights use locally extracted facts, without sending their PDFs. The app stores usage, filenames and costs, not document contents or AI responses.','تُعالج الملفات في ذاكرة الخادم. عند إرسال خطاب أو خطة رحلة يُرسل نصها والسياق الداعم إلى Google Gemini عبر الواجهة المدفوعة. تُرسل بيانات الجواز والطلب والفندق والطيران المستخرجة محلياً دون ملفاتها الأصلية. يحفظ التطبيق الاستخدام وأسماء الملفات والتكلفة، ولا يحفظ محتوى المستندات أو ردود الذكاء الاصطناعي.')
+
+_add('cost_context_extracted_fields','Extracted fields','البيانات المستخرجة')
+_add('cost_context_full_text','Document text','نص المستند')
+for _cost_item in (
+ ('cost_calculator','Estimate the cost of one file','تقدير تكلفة ملف واحد'),
+ ('cost_calculator_note','Planning calculator, not recorded usage. Enter input tokens and total output including thinking. No Gemini request is sent.','حاسبة تقديرية وليست استخداماً مسجلاً. أدخل رموز الإدخال والإخراج شاملاً التفكير. لا يُرسل أي طلب إلى Gemini.'),
+ ('cost_estimated_usd','Estimated cost (USD)','التكلفة التقديرية بالدولار'),
+ ('cost_estimated_egp','Estimated cost (EGP)','التكلفة التقديرية بالجنيه'),
+ ('cost_formula','USD = (input tokens × {input} + output/thinking tokens × {output}) ÷ 1,000,000. Standard uncached rates.','الدولار = (رموز الإدخال × {input} + رموز الإخراج والتفكير × {output}) ÷ 1,000,000. أسعار عادية بدون تخزين مؤقت.'),
+ ('cost_fx_snapshot','USD/EGP: {rate} · Rate date: {date}','الدولار بالجنيه: {rate} · تاريخ السعر: {date}'),
+ ('cost_fx_unavailable','USD/EGP conversion is unavailable. USD estimates remain available; no EGP amount was invented.','تحويل الدولار إلى الجنيه غير متاح. يظل التقدير بالدولار متاحاً دون افتراض سعر صرف.'),
+ ('cost_avg_review','Average per AI review','المتوسط لكل مراجعة ذكاء اصطناعي'),
+ ('cost_avg_file','Estimated average per document','المتوسط التقديري لكل مستند'),
+ ('cost_avg_input','Average input tokens','متوسط رموز الإدخال'),
+ ('cost_avg_output','Average output + thinking tokens','متوسط رموز الإخراج والتفكير'),
+ ('cost_avg_egp','Average cost (EGP)','متوسط التكلفة بالجنيه'),
+ ('cost_averages_note','Averages include recorded values only. Unknown usage/cost stays unknown. Per-document figures are allocated estimates, not independent provider measurements.','تشمل المتوسطات القيم المسجلة فقط. تظل الرموز والتكاليف المجهولة غير معروفة. أرقام المستندات أنصبة تقديرية وليست قياسات مستقلة من المزود.'),
+ ('cost_by_category','Estimated averages by document type','المتوسطات التقديرية حسب نوع المستند'),
+ ('cost_other','Unspecified type','نوع غير محدد'),
+ ('cost_col_category','Document type','نوع المستند'),('cost_col_files','Files','الملفات'),
+ ('cost_col_avg_input_tokens','Average input tokens','متوسط رموز الإدخال'),
+ ('cost_col_avg_output_tokens','Average output + thinking tokens','متوسط رموز الإخراج والتفكير'),
+ ('cost_col_avg_cost_egp','Average EGP cost','متوسط التكلفة بالجنيه'),
+ ('cost_col_fallback_from','Quota fallback from','النموذج الذي بلغ حد الاستخدام'),
+ ('reasoning_fallback_used','Gemini 3.8 reached its quota. This review used Gemini 3.6 Flash.','بلغ Gemini 3.8 حد الاستخدام. استُخدم Gemini 3.6 Flash لهذه المراجعة.'),
+):_add(*_cost_item)
+_add('cost_requests','AI reviews','مراجعات الذكاء الاصطناعي')
+
+# Multi-format, financial and bilingual evidence review.
+for item in [
+ ('reasoning_title','Letter, itinerary, bank and translation review','مراجعة الخطاب والخطة وكشف الحساب والترجمة'),
+ ('reasoning_scope','Reference documents use local JSON/text. Only bank/supporting files can use PDF input when visual reading is needed. Findings are advisory; the factual score is separate.','تستخدم المستندات المرجعية بيانات ونصوصاً مستخرجة محلياً. يمكن قراءة كشف الحساب والمستندات الداعمة بصيغة PDF عند الحاجة البصرية. الملاحظات استرشادية ودرجة الوقائع منفصلة.'),
+ ('bank_scope','Upload the complete statement covering the latest six months, including transactions, opening/closing dates and the latest balance.','ارفع كشف الحساب كاملاً لآخر ستة أشهر، شاملاً الحركات وفترة الكشف وآخر رصيد.'),
+ ('word_conversion_failed','This Word file could not be read completely. Save a readable DOCX or PDF copy and upload it again.','تعذرت قراءة ملف Word بالكامل. احفظ نسخة DOCX أو PDF واضحة وارفعها مجدداً.'),
+ ('upload_formats','PDF, Word (.doc/.docx), HTML, text and images are accepted. Word/HTML are converted locally; scripts and macros are never run.','تُقبل ملفات PDF وWord وHTML والنصوص والصور. يُحوّل Word وHTML محلياً دون تشغيل النصوص البرمجية أو وحدات الماكرو.'),
+ ('converted_copy_note','Word/HTML documents have reflowed evidence copies; cited page numbers refer to those converted copies.','لمستندات Word وHTML نسخ محوّلة معاد تنسيقها؛ تشير أرقام الصفحات إلى النسخ المحوّلة.'),
+ ('review_bank_problems','Bank statement points requiring explanation','ملاحظات كشف الحساب التي تحتاج توضيحاً'),
+ ('review_trip_budget','Estimated tourism trip cost','التكلفة التقديرية للرحلة السياحية'),
+ ('review_sources','Source evidence','الأدلة من المستندات'),
+ ('review_visual_quote','Read visually from the PDF; verify this quotation and value in the original.','قُرئ من صورة PDF؛ راجع الاقتباس والقيمة في المستند الأصلي.'),
+ ('review_action_remove','Remove','احذف'),('review_action_correct','Correct','صحّح'),('review_action_verify','Verify','تحقّق'),
+ ('reasoning_kind_translation_error','English translation differs from the Arabic original','الترجمة الإنجليزية تختلف عن الأصل العربي'),
+ ('bank_salary_missing','The HR states a monthly {basis} salary of {amount} {currency}, but no exact matching credit was found in the completely read months: {months}. Confirm payroll dates, deductions and split payments.','يذكر خطاب العمل راتباً شهرياً {basis} بقيمة {amount} {currency}، ولم تظهر إضافة مطابقة تماماً في الأشهر المقروءة بالكامل: {months}. تحقق من مواعيد الصرف والاستقطاعات والدفعات المجزأة.'),
+ ('bank_salary_currency','The HR salary is {amount} {salary_currency}, while this account is in {currency}. A direct salary match cannot be established.','الراتب في خطاب العمل {amount} {salary_currency}، بينما الحساب بعملة {currency}. لا يمكن تأكيد التطابق المباشر.'),
+ ('bank_large_credit','On {date}, credits of {amount} {currency} were identified. Their share of the comparable total incoming funds is {share}%. This meets the configured large-credit rule; explain and document the source.','ظهرت في {date} إضافات بقيمة {amount} {currency}. حصتها من إجمالي الإيداعات القابلة للمقارنة {share}٪. تحقق شرط الإيداع الكبير؛ وضّح مصدره وأرفق ما يؤيده.'),
+ ('bank_short_window','The supplied statement covers {start} to {end}; it does not establish the full six-month review window.','يغطي الكشف المرفق الفترة من {start} إلى {end} ولا يثبت تغطية نافذة المراجعة الكاملة لستة أشهر.'),
+ ('bank_flag_explanation','This is a request for explanation, not an authenticity finding or evidence of illegal funds. Totals and absences depend on readable, complete transaction coverage.','هذه ملاحظة لطلب توضيح، وليست حكماً على الأصالة أو دليلاً على أموال غير مشروعة. تعتمد الإجماليات وعدم العثور على حركة على اكتمال الحركات ووضوحها.'),
+ ('salary_net','net','صافياً'),('salary_gross','gross','إجمالياً'),('salary_unknown','stated','مذكوراً'),('salary_unspecified','stated','مذكوراً'),
+ ('budget_estimate_note','Planning estimates include food, local transport and tourism activities, plus intercity transport and quoted hotel/flight totals. They are not live prices or consular minimums. Unknown prices remain missing.','تشمل التقديرات الطعام والتنقل المحلي والأنشطة السياحية والتنقل بين المدن وأسعار الفندق والطيران الواردة بالمستندات. ليست أسعاراً مباشرة أو حداً قنصلياً. تبقى الأسعار غير المتاحة بيانات ناقصة.'),
+ ('budget_total_trip','Estimated total trip cost','إجمالي تكلفة الرحلة التقديرية'),
+ ('budget_remaining_trip','Estimated amount still needed','المبلغ التقديري المتبقي'),
+ ('budget_egp_estimate','Approximately EGP {low}–{high}; exchange-rate date: {date}.','نحو {low}–{high} جنيه مصري؛ تاريخ سعر الصرف: {date}.'),
+ ('budget_city_estimate','{city}: {days} days × EUR {low}–{high} per day, excluding hotel and flights.','{city}: {days} أيام × {low}–{high} يورو يومياً، دون الفندق والطيران.'),
+ ('budget_latest_balance','Latest verified applicant balance: {amount} {currency}, statement ending {date}.','آخر رصيد متحقق لمقدم الطلب: {amount} {currency}، وينتهي الكشف في {date}.'),
+ ('budget_result_below_estimate','The balance is below the lower estimated remaining trip cost.','الرصيد أقل من الحد الأدنى للتكلفة المتبقية التقديرية.'),
+ ('budget_result_within_range','The balance falls inside the estimated remaining-cost range; allow for uncertainty.','يقع الرصيد داخل نطاق التكلفة المتبقية التقديرية؛ ضع هامشاً لعدم اليقين.'),
+ ('budget_result_covers_estimated_range','The balance covers this estimated remaining-cost range, subject to access to the funds and unpriced extras.','يغطي الرصيد نطاق التكلفة المتبقية التقديري، بشرط إتاحة الأموال واحتساب المصروفات غير المسعرة.'),
+ ('budget_result_partial_estimate','Some costs are unknown, so affordability is not established.','بعض التكاليف غير معروفة، فلا يمكن تأكيد كفاية الرصيد.'),
+ ('budget_result_unknown','The currency conversion or available balance is unknown.','تحويل العملة أو الرصيد المتاح غير معروف.'),
+ ('budget_missing_data','Estimate is incomplete. Missing or unverified: {items}.','التقدير غير مكتمل. بيانات ناقصة أو غير متحققة: {items}.'),
+ ('budget_missing_city_evidence','city evidence','دليل المدينة'),('budget_missing_trip_day_coverage','trip dates/day coverage','تواريخ الرحلة وتغطية الأيام'),
+ ('budget_missing_transport_range','transport estimate','تقدير التنقل'),('budget_missing_reservation_evidence','booking price evidence','دليل سعر الحجز'),
+ ('budget_missing_currency_conversion','exchange rate','سعر الصرف'),('budget_missing_flight_price','flight price','سعر الطيران'),
+ ('budget_missing_hotel_price','hotel prices','أسعار الفنادق'),('budget_missing_verified_latest_applicant_balance','verified latest applicant balance','آخر رصيد متحقق لمقدم الطلب'),
+ ('budget_missing_city_cost_estimates','city cost estimates','تقديرات تكلفة المدن'),
+ ('cost_context_extracted_text','Locally extracted text','نص مستخرج محلياً'),('cost_context_pdf_visual','PDF and available local text','PDF والنص المحلي المتاح'),
+ ('privacy','Documents are processed in server memory. Gemini receives JSON/text for passports, visa forms, hotels, flights, HR and insurance. Bank/supporting files may use PDF input for visual reading. Usage, filenames and estimated costs are stored, not document text or AI answers.','تُعالج المستندات في ذاكرة الخادم. يتلقى Gemini بيانات ونصوص الجواز والطلب والفندق والطيران والعمل والتأمين. قد يُستخدم PDF لكشف الحساب والمستندات الداعمة للقراءة البصرية. يُحفظ الاستخدام وأسماء الملفات والتكلفة التقديرية، دون نصوص المستندات أو إجابات الذكاء الاصطناعي.'),
+]:
+    _add(*item)
+
+_add('text_section','Text section','قسم النص')
+_add('usa_workspace','USA · Local DS-160 consistency review','الولايات المتحدة · مراجعة محلية لتطابق بيانات DS-160')
+_add('usa_review_description','Compare DS-160 answers with the passport and client form. Check the hotel name and check-in/check-out dates.','قارن إجابات DS-160 بجواز السفر واستمارة العميل، وتحقق من اسم الفندق وتاريخي الوصول والمغادرة في الحجز.')
+_add('usa_upload_hint','Upload the full DS-160 application/review printout, hotel booking, passport and client form. A confirmation page alone does not contain all the answers needed for comparison.','ارفع نسخة الطلب الكامل أو مراجعة بيانات DS-160، وحجز الفندق، وجواز السفر، واستمارة العميل. صفحة التأكيد وحدها لا تحتوي على جميع الإجابات اللازمة للمقارنة.')
+_add('usa_privacy','USA documents are read locally into structured fields and text. No Gemini or other external AI requests are made.','تُقرأ مستندات الولايات المتحدة محلياً إلى حقول ونصوص منظمة. لا تُرسل أي طلبات إلى Gemini أو أي ذكاء اصطناعي خارجي.')
+_add('usa_results','USA document consistency review','مراجعة تطابق مستندات الولايات المتحدة')
+_add('usa_wrong_passport_verified','The uploaded passport belongs to a different applicant. Upload the passport matching the DS-160 and client form; do not replace their identity details with this passport.','جواز السفر المرفوع يخص شخصاً آخر. ارفع جواز السفر المطابق لنموذج DS-160 واستمارة العميل، ولا تستبدل بياناتهما ببيانات هذا الجواز.')
+_add('usa_wrong_passport_provisional','Possible wrong passport: the name and number read from this image differ from the DS-160 and client form. Verify the original passport; the image reading is provisional.','قد يكون جواز السفر المرفوع خاطئاً: الاسم والرقم المقروءان من الصورة يختلفان عن DS-160 واستمارة العميل. تحقق من أصل الجواز؛ قراءة الصورة لم تُؤكد بعد.')
+_add('usa_wrong_passport_title','Wrong passport uploaded','تم رفع جواز سفر لشخص آخر')
+_add('usa_wrong_passport_possible','Possible wrong passport uploaded','قد يكون جواز السفر المرفوع لشخص آخر')
+_add('usa_problem_title','Problems to correct','مشكلات تحتاج إلى تصحيح')
+_add('usa_wrong_value','Wrong / uploaded value','القيمة الخاطئة أو المرفوعة')
+_add('usa_right_value','Correct / expected value','القيمة الصحيحة أو المطلوبة')
+_add('usa_source_details','Show source evidence','عرض أدلة المستندات')
+_add('usa_evidence_title','Source evidence','أدلة المستندات')
+_add('usa_converted_text_evidence','Converted text evidence · original text section','دليل نصي محوّل · قسم من النص الأصلي')
+_add('usa_check_unavailable','The comparison could not be completed from the supplied fields.','تعذر إكمال المقارنة بالحقول المقدمة.')
+_add('usa_ocr_note','The image reading needs verification against the original.','تحتاج قراءة الصورة إلى التحقق من الأصل.')
+_add('field_passport_identity','Passport holder','صاحب جواز السفر')
+_add('field_hotel_name','Hotel name','اسم الفندق')
+_add('field_us_contact_hotel','DS-160 U.S. contact — hotel workflow','جهة الاتصال الأمريكية في DS-160 — مسار الفندق')
+_add('usa_contact_hotel_workflow','This review workflow expects hotel contact information when a hotel booking is supplied. Compare the DS-160 contact section with the hotel details printed on the booking.','يتطلب مسار المراجعة هذا بيانات اتصال الفندق عند تقديم حجز فندقي. قارن قسم جهة الاتصال في DS-160 ببيانات الفندق المطبوعة على الحجز.')
+_add('usa_checked_document','Document being checked','المستند الجاري فحصه')
+_add('usa_comparison_document','Comparison document','المستند المستخدم للمقارنة')
+_add('usa_checked_value','Value in the checked document','القيمة في المستند الجاري فحصه')
+_add('usa_comparison_value','Value in the comparison document','القيمة في مستند المقارنة')
+_add('usa_no_comparison_value','No readable comparison value','لا تتوفر قيمة مقروءة للمقارنة')
+_add('usa_value_not_extracted','Value not extracted','لم تُستخرج القيمة')
+_add('usa_document_not_supplied','Not supplied','لم يُرفق')
+_add('usa_source_explainer','Values and evidence come from your uploaded documents. Each comparison names its file and page or text section. A blank value means the reader could not extract it; it is not proof of an error.','تأتي القيم والأدلة من مستنداتك المرفوعة. تُذكر أسماء الملفات وأرقام الصفحات أو أقسام النص لكل مقارنة. تعني القيمة الفارغة أن القارئ تعذر عليه استخراجها، ولا تثبت وجود خطأ.')
+_add('usa_missing_hotel_contacts','Not available on the booking: {fields}. These details need verification; no replacement value was guessed.','غير متوفر في الحجز: {fields}. تحتاج هذه البيانات إلى تحقق؛ ولم تُخمن قيم بديلة.')
+_add('field_hotel_phone','Hotel phone','هاتف الفندق')
+_add('field_hotel_email','Hotel email','البريد الإلكتروني للفندق')
+_add('usa_verification','Needs verification','يحتاج إلى تحقق')
+_add('usa_coverage','Checks matched','فحوص متطابقة')
+_add('usa_incomplete','Some comparisons could not be completed. Read the verification notes before using these results.','تعذر إكمال بعض المقارنات. اقرأ ملاحظات التحقق قبل الاعتماد على النتائج.')
+_add('usa_fields','Extracted fields and comparison details','الحقول المستخرجة وتفاصيل المقارنة')
+_add('usa_download_json','Download structured review (JSON)','تنزيل المراجعة المنظمة (JSON)')
+_add('usa_reference_conflict','References disagree; verify the original documents before changing DS-160.','تختلف المستندات المرجعية؛ تحقق من الأصول قبل تعديل DS-160.')
+_add('usa_field_unavailable','Missing, ambiguous or OCR-only values cannot establish a confirmed mismatch.','القيم المفقودة أو الملتبسة أو المقروءة فقط بالتعرف الضوئي لا تثبت وجود اختلاف مؤكد.')
+_add('usa_hotel_contact_name','DS-160 provides a U.S. contact organization. Verify whether this is the hotel and whether its name is abbreviated.','يتضمن DS-160 اسم جهة اتصال في الولايات المتحدة. تحقق مما إذا كانت هذه الجهة هي الفندق وما إذا كان الاسم مختصراً.')
+_add('usa_salary_basis','Monthly salary and average monthly income can have different bases. Verify the amounts and their meaning before correcting them.','قد يختلف أساس الراتب الشهري عن متوسط الدخل الشهري. تحقق من القيم ومعناها قبل تعديلها.')
+_add('usa_duration_basis','When DS-160 states days without a departure date, arrival and departure may both count as travel days. The comparison allows either day-count convention.','عندما يذكر DS-160 عدد الأيام دون تاريخ المغادرة، قد يُحسب يوما الوصول والمغادرة ضمن مدة الرحلة. تراعي المقارنة طريقتي حساب الأيام.')
+_add('usa_not_eligibility','These checks compare supplied information; they do not assess visa eligibility or document authenticity.','تقارن هذه الفحوص البيانات المقدمة؛ ولا تحدد أهلية التأشيرة أو صحة المستندات.')
+for _field,_en,_ar in (
+    ('surname','Surname','اسم العائلة'),('given_names','Given names','الأسماء الأولى'),
+    ('nationality','Nationality','الجنسية'),('gender','Sex','الجنس'),
+    ('arrival_date','Arrival date','تاريخ الوصول'),('departure_date','Departure date','تاريخ المغادرة'),
+    ('length_of_stay','Length of stay','مدة الإقامة'),('hotel_address','Hotel/stay address','عنوان الفندق أو الإقامة'),
+    ('stay_city','City of stay','مدينة الإقامة'),('stay_state','State of stay','ولاية الإقامة'),
+    ('stay_zip','ZIP/postal code','الرمز البريدي'),('email','Email','البريد الإلكتروني'),
+    ('phone','Phone','الهاتف'),('marital_status','Marital status','الحالة الاجتماعية'),
+    ('employer_name','Employer name','اسم جهة العمل'),('occupation','Occupation','المهنة'),
+    ('document_coverage','Document coverage','تغطية المستند'),
+    ('national_id_number','National ID number','الرقم القومي'),('birth_city','City of birth','مدينة الميلاد'),
+    ('birth_country','Country of birth','دولة الميلاد'),('employment_start_date','Employment start date','تاريخ بدء العمل'),
+    ('monthly_salary','Monthly salary','الراتب الشهري'),('monthly_income','Average monthly income','متوسط الدخل الشهري'),
+    ('employer_address','Employer address','عنوان جهة العمل'),('employer_phone','Employer phone','هاتف جهة العمل'),
+    ('education_name','Educational institution','المؤسسة التعليمية'),('education_course','Course of study','التخصص الدراسي'),
+    ('education_period','Education period','فترة الدراسة'),('father_full_name',"Father's full name",'اسم الأب بالكامل'),
+    ('father_date_of_birth',"Father's date of birth",'تاريخ ميلاد الأب'),('mother_full_name',"Mother's full name",'اسم الأم بالكامل'),
+    ('mother_date_of_birth',"Mother's date of birth",'تاريخ ميلاد الأم'),('spouse_full_name',"Spouse's full name",'اسم الزوج أو الزوجة'),
+    ('spouse_date_of_birth',"Spouse's date of birth",'تاريخ ميلاد الزوج أو الزوجة'),('spouse_nationality',"Spouse's nationality",'جنسية الزوج أو الزوجة'),
+    ('languages','Languages','اللغات'),('trip_sponsor','Trip sponsor','المتكفل بمصاريف الرحلة'),
+    ('social_facebook','Facebook account','حساب فيسبوك'),('social_instagram','Instagram account','حساب إنستجرام'),
+    ('social_linkedin','LinkedIn account','حساب لينكدإن'),('social_twitter','Twitter / X account','حساب تويتر أو إكس'),
+    ('prior_refusal','Previous U.S. visa refusal','رفض تأشيرة أمريكية سابق'),('prior_us_visit','Previous U.S. visit','زيارة سابقة للولايات المتحدة'),
+    ('military_service','Military service','الخدمة العسكرية'),('relatives_us','Relatives in the U.S.','الأقارب في الولايات المتحدة'),
+):
+    _add('field_'+_field,_en,_ar)
+
+_add('bank_salary_uncertain','The HR states {amount} {currency}, but salary credits could not be verified for: {months}. Check the account, readable transaction rows and payroll details.','يذكر خطاب العمل {amount} {currency}، وتعذر التحقق من إضافات الراتب للأشهر: {months}. راجع الحساب وصفوف الحركات المقروءة وتفاصيل صرف الراتب.')
+_add('converted_copy_note','Word/HTML evidence is converted locally. Native-text citations use text sections; PDF citations refer to the reflowed evidence copy.','تُحوّل أدلة Word وHTML محلياً. تشير إحالات النص الأصلي إلى أقسام النص، وإحالات PDF إلى نسخة الأدلة المعاد تنسيقها.')
+_add('budget_payment_assumption','Bookings without explicit payment confirmation are included in the estimated amount still needed.','تُحتسب الحجوزات التي لا يوجد تأكيد صريح لسدادها ضمن المبلغ التقديري المتبقي.')
+
+_add('supporting_translation_hint','Upload the Arabic original and matching English translation together or as separate files. Arabic anchors the translation comparison.','ارفع الأصل العربي وترجمته الإنجليزية المطابقة معاً أو في ملفات منفصلة. يُعتمد الأصل العربي مرجعاً لمقارنة الترجمة.')
+_add('bank_large_credit_absolute','On {date}, credits of {amount} {currency} meet the EGP 500,000 rule. Their share of total incoming funds could not be verified; explain and document the source.','ظهرت في {date} إضافات بقيمة {amount} {currency} تستوفي حد 500,000 جنيه. تعذّر التحقق من حصتها من إجمالي الإيداعات؛ وضّح مصدرها وأرفق ما يؤيده.')

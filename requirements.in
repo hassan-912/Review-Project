@@ -1,6 +1,5 @@
 # Direct dependencies pinned to the release's verified versions.
 streamlit==1.61.1
-google-genai==2.17.0
 pydantic==2.13.4
 pymupdf==1.28.2
 supabase==2.31.0
@@ -10,3 +9,7 @@ python-dotenv==1.2.3
 Pillow==12.3.0
 uharfbuzz==0.52.0
 tzdata==2026.3
+-r requirements-ocr.txt
+sentry-sdk==2.73.0
+httpx==0.28.1
+olefile==0.47

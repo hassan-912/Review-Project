@@ -1,375 +1,215 @@
-# MG Visa File Review — production release
+# MG Visa File Review
 
-## Administration workspace, cost tracking and appointments — 2026-10-19
+## Gemini narrative review — 27 October 2026
 
-The administration dashboard now separates Reviews, Access approval and revoke,
-Upload categories, Models and usage, Review costs, Team review log and Website maintenance.
-Ordinary admins retain approval/log access; global settings, billing and maintenance require
-an approved super administrator, reverified on the server and in privileged database functions.
+Apply `supabase/migrations/202610270001_gemini_review.sql` to the existing Supabase
+project. Add `GEMINI_API_KEY` from a billing-enabled Google project to server secrets,
+with `GEMINI_MODEL=gemini-3.8-flash` and optional
+`GEMINI_FALLBACK_MODEL=gemini-3.6-flash` (the default fallback). Optionally set a positive `USD_EGP_RATE`; otherwise
+a dated public exchange-rate feed is used. Configure hosted secrets separately.
 
-The connected database migration is saved in
-`supabase/migrations/20261018232642_admin_workspace.sql`. It adds server-only pricing and
-usage snapshots, review references, maintenance state and the appointment category. It was
-applied to `mgvisa-reviewer`; maintenance remains OFF and tracking remains FREE. The UI
-source still needs deploying through the application's normal release process.
+Letters, plans, bank statements and supporting documents are reviewed after local extraction. Passport,
+application, hotel, flight, HR and insurance use local fields/text; their PDFs are
+never sent to Gemini. Bank/supporting PDFs may be attached for visual fallback. Word, HTML and image uploads are normalized locally. The admin
+cost section records actual per-request tokens and EGP costs, with clearly labelled
+per-file allocations. Read `docs/NARRATIVE_REVIEW.md` for scope, billing and validation.
+The dashboard includes averages per AI review/document, document-type averages,
+individual file estimates and an interactive EGP calculator even with no usage.
+Quota rejection before generation may switch once to 3.6 Flash. Other errors,
+reported usage and generated/invalid results never trigger an automatic repeat.
 
-Costs are USD estimates for recorded app inference only. Each new reservation captures its
-billing mode and effective input/cached-input/output rates. Output includes thinking tokens.
-The cost page provides date filters, daily trends, model and review totals, a monthly alert
-and a CSV export. Switching tracking mode neither enables Google billing nor changes quota
-limits. The alert is not a spending block. Unknown historical rates/usage remain unknown,
-not zero; totals can be incomplete. No applicant documents or prompts are stored. Token-only
-usage records now persist beyond 32 days so previous billing months remain reconcilable.
-Review names still follow existing review-attempt retention; older costs retain their IDs.
-Rates are seeded from Google's official Standard pricing verified 2026-10-19, with the
-published Flash increase scheduled for 2027-01-01. Future price changes require updating
-`model_token_prices`; previous usage is not repriced. Taxes, hosting, external API usage,
-tools and cache-storage fees are excluded. Reconcile against Google billing.
+These local changes do not deploy the hosted website or apply the database migration.
 
-Maintenance blocks the public application and all customer pages, including active sessions
-on the next interaction or within the 15-second watchdog interval. The approved super admin
-keeps management access to resume service. Both review and inference reservations reject
-maintenance at the database layer. A request already sent to Google cannot be recalled; it
-may finish and incur usage. Maintenance and the separate new-review pause do not overwrite
-each other. A post-inference check prevents displaying a report during maintenance.
+## Current factual review flow
 
-Appointment uploads are read by both extraction passes. The deterministic agency rule is a
-minimum of 60 calendar days after the actual appointment date, checked independently against
-visa-form entry, outbound flight departure and every hotel check-in. This implements the
-requested rejection of 2027-01-20 following a 2026-12-01 appointment (exactly 50 days), and
-recommends 2027-01-30 or later. This is an agency planning buffer, not an embassy processing
-requirement or guarantee. Unreadable/conflicting appointment dates produce manual verification
-and a provisional result, without inventing a date-based deduction. Appointment uploads are
-optional; old cache entries are invalidated through the updated review schema version.
+The website uses local Python/PDF/OCR parsers and deterministic key/value comparisons.
+Gemini now performs motivation-letter/travel-plan review from extracted reference facts;
+see `docs/NARRATIVE_REVIEW.md`. There is no AI extraction fallback for unsupported
+reference templates. Unsupported or uncertain
+readings cannot become confirmed applicant errors. Initial local OCR use can still take longer
+while loading its models; subsequent page interactions do not repeat review extraction.
 
-Verification: the full offline regression suite passed 238 tests, followed by focused checks
-for the final maintenance-only sign-in restriction. English/Arabic dashboard rendering,
-CSV export, appointment boundaries, cost arithmetic and permission enforcement are covered.
+Tourism workspaces are available for all eight listed Schengen countries. Business,
+Canada and UK remain under processing. USA has a separate, fully local DS-160 route
+with exactly DS-160, hotel, passport and client-form uploads; it does not require or
+call Gemini. Read `docs/USA_REVIEW.md` for its template and comparison coverage.
+Supported Schengen source templates, HR comparisons,
+passport references and the 60-day appointment planning buffer remain in place. The latter
+is this service's planning rule, not an embassy processing guarantee.
 
-Database verification: private tables have RLS enabled and no anon/authenticated privileges;
-new privileged functions use SECURITY INVOKER and are service-role-only. Rollback-only tests
-confirmed maintenance blocks both reservation paths, unauthorized changes fail, and completing
-usage twice cannot overwrite recorded token counts. Advisor findings for policy-free private
-tables are intentional. The existing leaked-password-protection advisory remains unrelated to
-this release: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
+The Schengen selector contains only Spain and the seven requested additional destinations:
+France, Germany, Netherlands, Italy, Sweden, Belgium and Greece. Each country opens the shared
+upload/review flow and reports its selected destination. Country selection does not authorize
+new PDF layouts: application extraction still requires the existing label, page and alignment
+checks until additional templates are mapped. See `templates/schengen/README.md` for the contract.
+Company-address comparisons use the application employer section and explicit HR company
+address, never applicant home address. Ambiguous or provisional readings remain unverified.
 
+Spain has dedicated National ID translation and Bank declaration upload cards immediately
+after the visa application form. They feed the existing local supporting-template parsers;
+general supporting uploads are preserved alongside them. Shared category-order preferences
+keep their existing IDs, so no database migration is required for these Spain-only cards.
 
-## ID reference notes and signup - 2026-10-17
+The customer report shows confirmed corrections only, with the wrong value in red, the
+expected value in green and a screenshot of the entire source field. Uploaded thumbnails
+and review settings stay removed. Unverified checks remain limitations internally; a report
+with no confirmed corrections does not mean unsupported documents were verified.
 
-A national ID number extracted from a document without an independent readable ID-number
-reference stays visible as a manual-verification note. This specific note neither deducts
-points nor makes the score provisional. Confirmed mismatches, missing required fields and
-other unresolved identity checks retain their scoring behavior. The cache schema changes
-so future reviews do not reuse the previous deduction.
+Hotel-date corrections use the labelled check-in/check-out fields. Cancellation-policy
+dates cannot substitute for missing field evidence. A late first check-in or early final
+check-out produces one boundary correction, without a duplicate gap comparing derived dates.
+Accommodation coverage and internal missing-night checks are disabled. Source screenshots
+use version 3 and review identities use local engine version 7 so older misleading results
+are not reused; rerun an existing review after the validation update.
 
-Signup and password reset accept six or more characters with no character-mix rules.
-Supabase Auth enforces a hard minimum of six; four is unsupported. The production email
-provider minimum was reduced from eight to six after explicit user confirmation; the
-provider already had no required character classes. Existing credentials are preserved.
+Direct comparison references also show the actual source field with a green marker. A
+calculated threshold is not highlighted as if printed in a reference document. An empty
+Passport slot produces one upload instruction instead of separate missing-number/expiry
+cards. Narrative upload presence is checked before duplicate bytes are removed, so a
+combined cover letter/travel plan retains both Gemini review roles rather than a false missing file.
 
-## Bank balance and upload workspace - 2026-10-16
+## Faster page updates
 
-Flight and hotel holds are informational booking statuses, without a score deduction
-or a ticket/prepayment demand. A clearly issued e-ticket takes precedence over hold text.
-Downloaded reports omit document source filenames/pages; the interactive evidence view
-remains available in the app.
+Client name and uploads share a form. Run review submits a committed snapshot once; clearing
+works on its first click. Results are cached per browser for 30 minutes with at most three
+reviews, keyed by content, language, country, trip type and the local engine version.
 
-The bank-statement category sends only the final original page to both model passes,
-including for scanned PDFs. Earlier pages are neither sent nor analysed. Page-coverage
-counts use this explicit scope. The final available or closing balance, its printed
-currency/date and any final-page holder name are source-grounded before use.
+Independent passport, Spain form, hotel, flight and HR readings are also reused within the
+same browser session. This bounded metadata cache holds at most 32 parser results for 30
+minutes; it stores no uploaded bytes. Its keys include the parser version, filename and
+content digest. Changing a file invalidates its reading; comparisons and evidence assembly
+run again against the current upload set. Mutable readings are copied before reuse. Clearing
+the file, changing review scope, losing access, maintenance or signing out removes this cache.
+An explicit forced review resets it as well. Nothing is shared between customer sessions.
 
-Budget comparisons are non-scoring planning aids. They use explicit remaining booking
-prices and an editable EUR 75/day starting allowance for food, local transport and activities;
-this is not a consular minimum. Paid costs require explicit evidence. Missing prices,
-unknown ownership and unavailable conversions prevent a complete affordability conclusion.
-Statements are assessed separately, not summed. Public indicative EUR exchange rates are
-cached daily from the free ExchangeRate-API endpoint, dated and attributed in the app;
-no applicant data is sent to that endpoint. No paid inference provider is added.
+The shared OCR models prepare in a background thread while an approved user chooses files.
+Preparation uses generated text, never customer documents. Uploading does not run extraction;
+the first review of scans can still take tens of seconds depending on pages and image size.
+Native upload progress animations remain enabled, upload captions target only the Browse
+button, and the page no longer imports a remote font stylesheet. Native upload transfer
+time still depends on file size and the connection; no framework upload handler is patched.
 
-Upload cards show bounded, session-only PDF/image thumbnails, with final-page thumbnails
-for bank statements. Category IDs and file hashes stay stable when the super admin changes
-the team's shared display order. Apply `supabase/upload_categories.sql` before deploying:
-the settings table stays server-only and the save RPC rechecks the approved super-admin
-role, validates the complete category list and records the setting change.
+Ordinary page reruns reuse per-browser authorization and service-status snapshots for at
+most 15 and 10 seconds respectively. A separate 15-second watchdog refreshes access and
+maintenance status. Review execution bypasses the display snapshots, checks approval and
+maintenance again, reserves its attempt atomically, and rechecks access before showing results.
+Administrative writes retain live role checks. Sign-out clears browser state. Supabase's
+server-only service client reuses its HTTP pool; user auth clients remain isolated per browser.
 
-Verification: 204 offline tests pass. A tracked live review of fictional documents
-read the final bank page only, recovered the correct balance/currency, extracted both
-booking totals and reported both holds without deductions. Both PDF languages were
-rendered and checked with no source filenames/page references in the export. Database
-authorization/payload/grant assertions passed in a rolled-back transaction. Existing
-server-only RLS tables intentionally have no client policies; no new public access was added.
+Each user has at most five review attempts per Cairo calendar day (midnight reset).
+Lower saved daily/hourly limits still apply to regular accounts. Approved Admin
+and Super Admin accounts have no hourly or daily cap. Failed attempts
+count. The database atomically enforces these limits. Initial factual+Gemini review uses
+one attempt; an explicit AI retry uses a new attempt. Paused reviews have a separate message.
 
-## Context review correction — 2026-10-16
+Admin sections load only their own data. Corrections PDFs are built on demand in Streamlit's
+download worker, rather than during report rendering; downloads do not rerun the page.
+Rendered field screenshots and PDFs stay in the browser session's server memory.
 
-Reviews now use an extraction pass followed by an independent contextual read of the
-original sources. Both passes use the existing free-model router and quota accounting;
-fallback attempts and the extra inference consume the configured free quotas. The second
-pass must account for every supplied filename, page and review criterion. Identical uploads
-are read once; same-named files with different contents receive distinct source identifiers.
-Small scanned cards receive supplementary crops from their original pages in memory.
+## Local run
 
-Student enrollment is classified separately from employment. Native-script names are
-compared to the passport's native name, and ID dates retain their printed precision.
-Supporting claims preserve the subject's role and first-name-only register columns.
-Application destination is compared directly with the booked main destination; country
-language/code aliases and equal-night ties are handled without selecting an arbitrary winner.
-
-Readable PDF form cells supply blank contact/identity findings. Booking hold statuses
-and numeric-versus-written translation dates are checked against source text.
-Contextual findings require traceable quotes; actual source lines can repair an imprecise
-model quotation only when the asserted literal value is located unambiguously. Missing page
-audits and unresolved evidence are review limitations, not deductions from the applicant's
-file. Incomplete reviews display a provisional score. Neutral unverified descriptive claims
-remain marked unverified without becoming invented document defects.
-
-Missing cover-letter sections are grouped into one finding. When no letter exists, writing
-templates use grounded trip details and explicit placeholders rather than invented funding
-or return obligations. Flight-day advice uses final-destination arrival and return departure
-times. Source references remain attached to the actual file/page. The PDF exporter resets
-fallback fonts between scripts so an Arabic run cannot hide subsequent English references.
-
-Regression tests use synthetic identities/documents. Private live-case review artifacts
-remain under ignored local directories and are never committed.
-The corrected release passes 181 offline regression/UI tests. A private live two-pass
-review was checked against the original pages, including the side-by-side evidence view
-and a rendered three-page PDF; the source documents are not part of the repository.
-
-## Free hosting
-
-Live deployment: **https://mg-visa-review.streamlit.app/** (2026-10-12).
-Production health returned `ok`, and English and Arabic sign-in screens were verified.
-Supabase's Site URL and exact redirect allowlist now point to the production domain.
-
-Deploy `app.py` from the `codex/production-ready` branch of `hassan-912/Review-Project`
-on Streamlit Community Cloud. Select Python **3.12** in Advanced settings. Dependencies
-are pinned in `requirements.txt`; `requirements.in` records the direct dependencies.
-
-Copy the variables from `.streamlit/secrets.example.toml` into the hosting dashboard's
-Secrets field using the current values from the local `.env`. Do not put real values in
-GitHub. Both `.env` and `.streamlit/secrets.toml` are gitignored. Set `APP_URL` to the
-final HTTPS app address. Environment variables continue to work for local deployments.
-
-The application still requires Supabase login, email confirmation and administrator
-approval. Restrict Community Cloud sharing to the MG team where available; keep the
-application approval gate enabled. Free hosting can sleep when idle and has shared
-resource limits; it does not provide a paid availability guarantee. Hosting being free
-does not remove Google Gemini API usage charges or quotas.
-
-## Database
-
-The production guardrails in `supabase/production.sql` were applied to the connected
-`mgvisa-reviewer` project. They preserve the existing profile and review log schemas,
-protect the signup trigger, and add a server-only atomic review-attempt reservation.
-The app fails closed if this reservation cannot be checked. Defaults are 5 fresh
-analyses per rolling hour and 20 per rolling 24 hours per approved user. Failed AI
-requests consume an attempt. Reusing an existing session result does not call Gemini.
-
-Approval is checked against the live profile before each protected action. Admins can
-approve and revoke other users; they cannot revoke their own access through the UI.
-The watchdog rechecks sessions every minute while connected. Revocation blocks the next
-protected action, including reading history, running reviews and writing review logs.
-
-## Password reset
-
-In Supabase Authentication -> URL Configuration, set Site URL and allowlisted redirect
-URLs to the final `APP_URL`. Password reset uses the standard recovery email link;
-its URL fragment is consumed once by a minimal Streamlit component and immediately
-removed from the browser URL. The callback verifies it through Supabase before enabling
-a password change. Email delivery requires correctly configured Supabase email settings.
-No approval notification email is sent by this release; admins should notify the team
-through their normal process. Automated approval notifications are a later integration.
-
-## Sessions and data
-
-Auth clients and document caches belong to each Streamlit browser session. Admin database
-clients never sign in as users. Service-role keys remain on the server. New sessions
-never put access or refresh tokens in URLs. Legacy `_t`/`_r` links are consumed once,
-then cleared; failed restoration shows a translated expiry message. Active sessions
-refresh their tokens. A browser reload or server restart requires signing in again.
-Persistent browser login with secure HTTP-only cookies is a separate future feature.
-
-Documents are bounded to 20 MB each, 75 MB total, 30 files, and 150 pages per PDF.
-Files are checked server-side, stay in memory, and are sent to Google Gemini. Binary
-uploads are deleted from Gemini's File API after analysis or partial upload failures
-where deletion succeeds. Google's own retention terms still apply; the UI explains
-this. No client document files are written to application disk or Supabase storage.
-History stores client name, destination, agent, score and timestamp. It retains the
-existing `Client:::Country` format for compatibility.
-
-The score is labelled as an internal file-review score rather than an approval
-probability. The October 16 release preserves severity deduction amounts and tier caps, disables completeness bonuses when critical findings exist, and caps a critically unresolved file at 64 with an explicit not-ready status. The 11-rule
-engine is preserved, with accommodation checks extended across all bookings and a
-calendar-safe fix for three-month passport-validity calculations.
-
-## Verification
+Use Python 3.12 and install the compiled dependencies:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python -m pytest -q
-.\.venv\Scripts\python -m streamlit run app.py
+cd "C:\Users\Menna\Documents\projects\Review"
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m streamlit run app.py --server.address 127.0.0.1 --server.port 8501
 ```
 
-`scripts/smoke_gemini.py en` and `scripts/smoke_gemini.py ar` run live smoke tests with
-fictional in-memory documents. They incur model usage, never use real client files,
-and do not create review-log records. Each verifies identity extraction and two hotels.
-The CI workflow runs offline tests without real credentials.
+Copy `.env.example` to `.env` when setting up another machine. Configure SUPABASE_URL,
+SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY. Keep the service key server-side.
+Existing profile approvals, review-attempt quotas, maintenance controls and history remain
+in Supabase. Historical database migrations/data are preserved; historical model-usage tables remain untouched. Apply the new Gemini migration
+for its separate usage ledger and five-review calendar-day limit. Do not drop customer history during an upgrade.
 
-Release checks: **57 automated tests passed in a clean Python 3.12 environment**,
-with no dependency conflicts. Live Gemini reviews passed in both English and Arabic,
-each extracting two hotel bookings with matching identity evidence. English and Arabic
-Unicode PDFs were rendered and visually inspected, including an Arabic client name
-and correctly ordered ISO dates. Database quota grant/denial assertions passed inside
-a rolled-back transaction, and public execution privileges were confirmed disabled.
+## Sentry errors
 
-Before team use, sign in with an existing approved admin account on the deployed app,
-check both languages, run a representative review, download the PDF, and confirm
-history and revoke/restore controls. Password reset email delivery must be verified
-after the production redirect URL is configured. Existing users and reviews are preserved.
+The `mg-review` organization has a Python project named `visa-review`. Local configuration
+is in the ignored `.env`; the Codex Sentry plugin is installed and its connection authorized.
+The setup error was confirmed as VISA-REVIEW-1 with a filename/function/line stack frame:
+https://mg-review.sentry.io/issues/155437635/
 
-## Changes by file
+Set these server secrets on the hosted deployment as well:
 
-- `app.py`: bilingual access, upload, processing, report, history and admin views; active
-  session watchdog; safe cache invalidation; translated errors; working revoke controls.
-- `accounts.py`: isolated Auth clients, server-verified authorisation, live profile checks,
-  atomic quota requests and review logging; no shared user session.
-- `extractor.py`: all hotels, language-aware summaries, stable category routing, automatic
-  free-model routing, actual model reporting and File API cleanup.
-- `validator.py`: per-booking identity/missing-date checks, union of accommodation coverage,
-  month-end date handling and stable bilingual issue metadata.
-- `business_checker.py`: stable issue message IDs; sector matching logic unchanged.
-- `scorer.py`: critical-finding readiness gate and bonus protection.
-- `i18n.py`: English/Arabic interface, field names and rule explanations.
-- `theme.py` / `.streamlit/config.toml`: MG brand colours, accessible native controls, RTL
-  support, upload states, white bordered cards and production server settings.
-- `pdf_report.py` / `assets/fonts`: shaped Arabic and Unicode fonts, left-to-right technical
-  values, in-memory generation and bundled font licences.
-- `uploads.py`: canonical hashes incorporating model/language/schema; server-side file limits.
-- `review_pipeline.py`: testable orchestration independent of the UI.
-- `recovery.py`: one-time password-recovery fragment bridge.
-- `settings.py`: local environment and hosted secret configuration.
-- `tests/`, pinned requirements and `.github/workflows/checks.yml`: reproducible release checks.
+- SENTRY_DSN: copy the project's Client Keys (DSN) value.
+- SENTRY_ENVIRONMENT: production for the hosted app, development locally.
+- SENTRY_RELEASE: a version identifier or Git commit for the deployed code.
 
-## Rollback
+Leaving SENTRY_DSN empty disables reporting. Errors in page rendering, review execution and
+PDF downloading use `monitoring.py`. Unexpected local parser errors also report through
+this filter. Customer-facing review/page failures show a support reference that matches
+the event's support_reference tag. Monitoring failures never block a review.
 
-### October 12 follow-up release
+Error reports allow only exception type, sanitized stack filename/function/line, environment,
+release, operation and a random support reference. Exception messages, document contents,
+user identity, request bodies, credentials, local variables, source context, breadcrumbs and
+attachments are excluded. Automatic integrations, replay, tracing, profiling and logs are off.
+Sentry receives requests from the application server, not customer browsers. Automatic fixes
+or paid debugging features are not enabled; captured issues can be investigated before a fix
+is tested and released.
 
-- Visible native borders for signup, login, password recovery and client-name inputs;
-  all interface animations and transitions disabled. PDF bytes are reused per browser
-  session/report/language rather than rebuilt on every report interaction.
-- Signup requires a unique lowercase username (3–32 ASCII letters/numbers/dot/hyphen/
-  underscore, starting with a letter/number). Signup and password recovery require eight
-  characters without composition rules; the matching Auth setting was saved in Supabase.
-  Existing login remains email and password. Existing profiles have usernames derived
-  from their email; no account role or approval changed.
-- Applied `review_usernames_and_attempt_attribution` from `supabase/usernames.sql`.
-  Reviews retain verified profile usernames and reviewer emails. Admin attempts include
-  running/interrupted, completed, failed and legacy rows. Failed/legacy reviews show no
-  invented score; quotas still count failed analyses. Cache hits appear in completed
-  review history and do not consume another model-analysis allowance.
-- Added exact identity comparisons (including every booking/page), passport issue/expiry
-  and national-ID number/issue/expiry comparisons against their own source documents.
-  This earlier release rejected short names; the October 16 policy below supersedes it. Typography
-  and ordering may differ. Missing/unreadable required data and uncertain cross-script
-  names need manual verification. AI extraction is not an absolute OCR guarantee.
-- Combined cover-letter/travel-plan files are classified by content. Specific proposed
-  add/remove/replace/verify edits appear in the interface and both-language PDFs. Quotes
-  are checked against their section and, for text PDFs, the actual uploaded text.
-  Advice is separate from scoring, includes daily-plan gaps, and never invents facts.
-- Database signup/uniqueness/authorization/attempt assertions passed inside a rolled-back
-  transaction. Review-log client writes were revoked to prevent forged attribution.
-  The score formula is unchanged; the newly critical discrepancies affect its inputs.
+To submit another synthetic verification event deliberately:
 
-The username migration requires username-aware signup code. If reverting to an earlier
-app release, keep a compatible username-generating signup trigger or temporarily disable
-new signup during rollback. Do not drop usernames or existing review data.
+```powershell
+.\.venv\Scripts\python.exe scripts/verify_sentry.py
+```
 
-The pre-release redesign is preserved in commit `47f662d`. Local source backup:
-`C:\Users\Menna\Documents\projects\Review_pre_production_20261012`.
-To roll back the app, deploy a known working Git commit or branch through Community Cloud.
-The additive quota table can remain in the database during rollback; no user or review
-data was deleted. Restoring old code also restores its old session-security limitations.
+## Checks and release
 
+National ID numbers are read separately from the supported passport's printed Arabic-digit
+field using local OCR. The passport is the primary national-ID reference; a readable ID
+translation is the fallback when that passport field is unavailable. Application and ID
+translation values are compared independently. Low-confidence/conflicting readings are not
+accepted as references. This field is separate from the passport number and MRZ optional data.
 
-## October 16: source evidence, review policy and super administration
+Hotel date checks retain first check-in / last check-out comparisons against the application.
+Accommodation coverage, internal missing-night gaps and per-booking date-order rules are
+disabled. Existing hotel identity and appointment-buffer checks remain active. The review
+cache version changed, so run a fresh review to apply these rules to previously uploaded files.
 
-Apply `supabase/model_usage.sql` using Supabase migrations before deploying this code.
-The additive migration enables model accounting, super-admin controls and profile-based
-review quotas. The owner is promoted separately after code supporting `super_admin`
-is deployed. Keep the existing owner login; do not create a shared administrator password.
-A super administrator inherits the team dashboard and can change roles, approvals,
-per-user quotas, free-model priorities/caps and whether new reviews are enabled.
-The last approved super administrator and self-revocation are protected atomically.
-All configuration changes are recorded in `admin_audit` (90-day retention).
-Public/ordinary authenticated clients have no access to these control tables or RPCs.
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests -q
+.\.venv\Scripts\python.exe -m pip check
+```
 
-Application travel dates anchor bookings and itinerary checks with no three-day allowance.
-HR leave alone allows one day inward at each edge: leave November 25–29 permits trip
-starts November 25/26 and trip ends November 28/29. Travel outside leave is critical.
-All hotel stays must remain inside leave; only overall accommodation edges use the
-one-day rule. Itinerary rows must cover every application travel day.
+The suite covers local extraction, mismatches and uncertainty, HR/appointment dates, evidence
+screenshots, both languages, first-click submission, session isolation, fresh action checks,
+reused page snapshots, lazy admin reads, deferred downloads and actual SDK payload filtering.
+Tests disable real Sentry delivery. Gemini HTTP contract tests use synthetic source text and mocked provider responses. The verification script is an explicit one-event opt-in.
 
-Names accept the full passport name or first given name plus the complete surname.
-Compound surnames use the separately extracted passport surname. Other exact-token
-partial formats produce a format note; spelling errors, initials and blank names do
-not pass. Passport/national-ID issue/expiry discrepancies remain critical.
+For Community Cloud, update the repository/dependency lock and server secrets, then redeploy.
+`packages.txt` includes the native libraries required by CPU OCR. Hosted restart/cold-start
+time still depends on the host. These local edits do not publish or deploy the hosted site.
 
-Every supporting upload needs a classification, page audit and quoted claim assessment.
-Checks compare passport, identity, employment and date references supplied in the file.
-Text-PDF quotations are checked on the stated page; untraceable claims remain unresolved.
-A claim's consistency never establishes authenticity or confirms facts with an issuer.
-Mixed scanned/text PDFs use vision for the whole file, so scanned pages cannot disappear
-behind a text-only extraction. Completeness is a populated-field ratio, not measured
-accuracy; page coverage is model-reported, with uncertainties displayed separately.
+Routine navigation, sign-in mode changes, history search/pagination and cost-user
+filters use Streamlit fragments. Read-only access/service polling runs in a bounded
+background pool every 15 seconds; its small UI fragment checks completion once a
+second. Poll results are scoped to the browser's token and cannot overwrite a newer
+action check. Review submissions and admin changes still verify live permissions.
+Service status and upload-card order share one database read. Document engines load
+on demand; visiting the upload page no longer warms both OCR models. Large scans and
+Gemini generation still take time and show progress when a review is submitted.
 
-Evidence expanders show real uploaded page/crop bytes on the left and the expected
-value plus available reference on the right. Exact text matches and approximate
-AI-located regions have distinct labels; an unlocated finding falls back to a labelled
-page preview or an explicit unavailable message. Corrected official documents are never
-fabricated. Crops are generated lazily, bounded in size and cached only in that browser
-session. Source files and crops are not written to the database or application disk.
-Logout, revocation and clear-files actions remove the active report/session cache.
-The PDF includes readiness, expected values, evidence filenames/pages and dated advice.
+## Financial and translation review — 27 October 2026
 
-The free catalog is Gemini 3.8 Flash, 3.6 Flash, 3.5 Flash-Lite and 3.1 Flash-Lite, in that
-priority order. These model IDs and the connected project's free quotas were verified
-on October 16 in AI Studio. The old GEMINI_MODELS setting is ignored. Users cannot pick
-models. The router reserves project-wide RPM/RPD/input-TPM capacity atomically, calls
-each eligible model once, validates its JSON/schema before accepting it, and falls back
-on quota/unavailable/transient/invalid-output failures. CountTokens counts all prompt parts,
-including system text, with a conservative 32-token protocol allowance for reservations;
-provider output usage includes reasoning tokens where reported. Provider 429s trigger
-cooldowns, and identifiable daily quota errors wait until the next Pacific midnight.
-The SDK's default five HTTP attempts are disabled so routing owns retries, usage
-reservations track individual inference requests, and unavailable models fail over promptly.
+Bank AI scope now includes all transaction pages and the latest six-month window.
+Large-credit rules use EGP 500,000 or more than 60% of the comparable incoming total.
+Missing salary checks preserve net/gross and account/currency/coverage uncertainty.
+Daily city estimates plus quoted bookings form an explicitly approximate budget.
+Arabic supporting originals anchor English translation comparisons. Read
+`docs/NARRATIVE_REVIEW.md` for detailed provenance and limitations. No additional
+database migration is needed for these session-only review outputs.
 
-Model usage events contain only model/user IDs, counters, timing and coarse status;
-no prompts, documents, keys or raw provider exceptions are retained. Events remain for
-32 days. Requests since tracking began, including failed/reserved attempts, are counted.
-Dashboard remaining figures are app estimates against configured caps, exclude usage
-outside this app, and are not the provider's exact remaining quota. Provider-wide
-remaining is unavailable to this integration. Google usage displays can lag 15 minutes.
-Daily counters follow Pacific midnight and display their reset time in Cairo.
+Approved Admin and Super Admin accounts have unlimited reviews, with no hourly
+or daily cap. Each submission verifies the live database role and records a
+review attempt through the server-only service client. Regular accounts retain
+the atomic database quota and maximum five reviews per Cairo calendar day.
+No database migration is needed for the admin exemption.
 
-Google AI Pro includes higher limits inside AI Studio and eligible monthly Cloud credits;
-it does not automatically change this project's API billing tier. The connected project
-was verified as Free tier. Activating credits can require billing/prepayment. No billing
-upgrade or paid fallback is enabled. ChatGPT Plus usage and OpenAI API billing are
-separate, so OpenAI inference is not enabled under the zero-extra-spend requirement.
-
-The migration leaves original profiles, approval state and review history intact.
-Rollback to the pre-October-16 app requires restoring the owner's role to admin, or
-backporting super-admin role recognition; keep the additive tables and existing data.
-
-
-October 16 verification: 136 offline regression/UI tests cover both interface languages,
-HR boundary cases, full/short/compound names, document coverage, real in-memory crops,
-supporting-quote grounding, automatic routing and privileged-action authorization.
-Database assertions for quota grants/denials, pause, role escalation protection, last-super
-protection and RPC privileges passed in a rolled-back transaction. One tracked live review
-of eight fictional files succeeded via fallback to Gemini 3.5 Flash-Lite, with all eight
-page audits, combined-section detection, supporting classification and critical readiness.
-The evidence view was checked in the browser using those real extraction results, and
-both PDF languages were rendered. The Arabic PDF now separates labels and technical
-values to preserve visible labels and ISO date order with the pinned font shaper.
+Browser refresh restores login in the same tab using an opaque, random resume
+handle in sessionStorage. Supabase tokens stay in a bounded server-memory vault;
+SDK clients and authorization snapshots are never shared between sessions.
+Restoration validates Supabase credentials and reads live profile permissions.
+Logout removes the server ticket and clears the browser handle. Inactive tickets
+expire after eight hours. Server restarts/worker replacement require sign-in;
+multi-worker hosting needs sticky sessions or a shared session store.

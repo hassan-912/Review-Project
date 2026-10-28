@@ -21,7 +21,7 @@ def _ltr(text):
     return str(text)
 
 
-def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en", client_name="", writing=None, budget=None) -> bytes:
+def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en", client_name="", writing=None, budget=None, corrections_only=False) -> bytes:
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=18)
     for family in ("NotoSans", "NotoNaskhArabic"):
@@ -34,10 +34,10 @@ def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en
     pdf.add_page()
     alignment = "R" if lang == "ar" else "L"
 
-    def row(text, size=10, bold=False, color=(11,31,58)):
+    def row(text, size=10, bold=False, color=(11,31,58), fill=None):
         text=_plain(text)
         # Keep ISO dates in their original order within Arabic sentences.
-        if lang=='ar':
+        if lang=='ar' and re.search(r'[\u0600-\u06ff]',text):
             text=re.sub(r'\b\d{4}-\d{2}-\d{2}\b',lambda m:'\u200e'+m.group()+'\u200e',text)
         if re.search(r'[\u0600-\u06ff]',text):
             pdf.set_text_shaping(True,direction='rtl')
@@ -50,19 +50,43 @@ def build_pdf_report(extraction, issues, score_result, biz_result=None, lang="en
         pdf.set_font(fallback, "B" if bold else "", size)
         pdf.set_font(primary, "B" if bold else "", size)
         pdf.set_text_color(*color)
+        if fill is not None:pdf.set_fill_color(*fill)
         pdf.multi_cell(0, 7 if size < 14 else 10, text, align=alignment,
-                       new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                       new_x=XPos.LMARGIN, new_y=YPos.NEXT,fill=fill is not None)
 
-    def field_row(label,value,size=10):
+    def field_row(label,value,size=10,fill=None,color=(11,31,58)):
         if pdf.will_page_break(21):
             pdf.add_page()
         if lang=='ar' or re.search(r'[\u0600-\u06ff]',str(value)):
             # Separate Arabic labels from Latin values: the pinned fallback-font shaper
             # can otherwise drop labels and reorder numeric dates in mixed lines.
-            row(label,size,True)
-            row(value,size)
+            row(label,size,True,fill=fill,color=color)
+            row(value,size,fill=fill,color=color)
         else:
-            row(f'{label}: {value}',size)
+            row(f'{label}: {value}',size,fill=fill,color=color)
+
+    if corrections_only:
+        findings=[issue for issue in issues if issue.affects_score]
+        row(t('corrections_title',lang,count=len(findings)),18,True,(0,103,218))
+        if client_name:row(client_name,11)
+        if not findings:row(t('no_confirmed_mismatches',lang),11)
+        for issue in findings:
+            if pdf.will_page_break(70):pdf.add_page()
+            title,fix=issue_text(issue,lang)
+            row(document_label(issue.document_name.split(' (')[0],lang),14,True,(0,103,218))
+            if issue.field_name=='passport_upload':
+                row(t('passport_upload_missing',lang),11)
+                continue
+            for name in dict.fromkeys(location['source_file'] for location in issue.evidence if location.get('source_file')):
+                row(name,10,True)
+            row(title,11,True)
+            field_row(t('incorrect_value',lang),issue.found_value if issue.found_value is not None else t('missing_value',lang),
+                      fill=(251,233,231),color=(140,29,24))
+            pdf.ln(2)
+            label='gap_required_coverage' if issue.field_name=='hotel_coverage_gap' else 'correct_value'
+            field_row(t(label,lang),issue.expected_value,fill=(225,242,236),color=(11,74,62))
+            pdf.ln(5)
+        return bytes(pdf.output())
 
     row(t("pdf_title", lang), 20, True, (0,103,218))
     row(t("pdf_subtitle", lang), color=(80,96,122))

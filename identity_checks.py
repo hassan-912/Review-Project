@@ -12,7 +12,7 @@ def strict_identity_checks(data, existing=()):
     refs = {"full_name":data.passport.full_name, "given_names":data.passport.given_names,
             "surname":data.passport.surname, "passport_number":data.passport.passport_number,"date_of_birth":data.passport.date_of_birth,
             "passport_issue":data.passport.passport_issue, "passport_expiry":data.passport.passport_expiry,
-            "national_id_number":data.national_id.id_number, "national_id_issue":data.national_id.issue_date,
+            "national_id_number":data.passport.national_id_number or data.national_id.id_number, "national_id_issue":data.national_id.issue_date,
             "national_id_expiry":data.national_id.expiry_date}
     seen = set()
 
@@ -85,8 +85,9 @@ def strict_identity_checks(data, existing=()):
                 flag(doc,field,found,ref,"unreadable")
             elif a[:min(len(a),len(b))] != b[:min(len(a),len(b))]:
                 flag(doc,field,found,ref)
-        elif re.sub(r"\s+","",found).upper() != re.sub(r"\s+","",ref).upper():
-            flag(doc,field,found,ref)
+        else:
+            from passport_template_extractor import normalize_identifier
+            if normalize_identifier(found)!=normalize_identifier(ref):flag(doc,field,found,ref)
 
     # Preserve legacy summary checks, and add newly supported fields even if evidence rows
     # are omitted. The page-level rows below catch conflicting secondary reservations.
@@ -102,8 +103,7 @@ def strict_identity_checks(data, existing=()):
             flag("National ID","full_name",None,refs["full_name"],"unreadable")
         if not data.national_id.id_number:
             flag("National ID","national_id_number",None,None,"unreadable")
-        if data.passport.national_id_number and data.national_id.id_number and data.passport.national_id_number != data.national_id.id_number:
-            flag('National ID','national_id_number',data.national_id.id_number,data.passport.national_id_number)
+        check('National ID','national_id_number',data.national_id.id_number)
     for row in data.identity_evidence:
         if getattr(row,'subject_role','applicant') != 'applicant' or row.document == 'supporting' and getattr(row,'name_scope','full') == 'first_only':
             continue

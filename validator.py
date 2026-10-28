@@ -58,6 +58,7 @@ class ValidationIssue(BaseModel):
     evidence: list[dict] = Field(default_factory=list)
     reference_evidence: list[dict] = Field(default_factory=list)
     affects_score: bool = True
+    check_origin: str = 'unknown'
 
     @model_validator(mode="after")
     def localized_messages(self):
@@ -311,24 +312,8 @@ def _check_date_alignment(data: VisaDocumentExtraction) -> list[ValidationIssue]
             flag("Hotel Reservation","check_in_date",str(a),str(start),"First check-in must match application arrival.")
         if b and b!=end:
             flag("Hotel Reservation","check_out_date",str(b),str(end),"Last check-out must match application departure.")
-        cursor=start
-        intervals=[]
-        for hotel in data.hotel:
-            a,b=_parse_date(hotel.check_in_date),_parse_date(hotel.check_out_date)
-            if a and b and a>=b:
-                flag("Hotel Reservation","hotel_date_order",f"{a} / {b}","Check-in before check-out","Correct the booking dates.")
-            elif a and b:
-                intervals.append((a,b))
-            if a and a<start or b and b>end:
-                flag("Hotel Reservation","hotel_outside_trip",f"{a} / {b}",f"{start} / {end}",
-                     "Keep all accommodation dates inside the application's travel window.")
-        for a,b in sorted(intervals):
-            if a>cursor:
-                break
-            cursor=max(cursor,b)
-        if cursor<end:
-            flag("Hotel Reservation","hotel_coverage_gap",str(cursor),str(end),
-                 "Provide bookings covering every night of the application's travel dates.")
+        # Hotel checks compare the first check-in and last check-out above.
+        # Accommodation coverage, internal gaps and per-stay order are not review rules.
         ins_start,ins_end=_parse_date(data.insurance.valid_from),_parse_date(data.insurance.valid_until)
         if ins_start and ins_start>start:
             flag("Travel Insurance","valid_from vs departure_date",str(ins_start),str(start),
